@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ 'Join' if mode == 'signup' else 'Sign in' }} — Carriage</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="page-scroll">
+    <header class="topbar">
+        <a class="brand" href="{{ url_for('wall') }}">Carriage</a>
+        {% include "_nav.html" %}
+    </header>
+
+    <main class="auth">
+        <div class="auth-card">
+            {% if mode == 'signup' %}
+            <h1>Make an account</h1>
+            <p class="auth-lead">Then type a photograph and pin it to the family wall.</p>
+            <form method="post" class="auth-form">
+                {% if invite_required %}
+                <label>Family word
+                    <input type="text" name="invite" autocomplete="off" required>
+                </label>
+                {% endif %}
+                <label>Your name
+                    <input type="text" name="display_name" maxlength="40" required>
+                </label>
+                <label>Username
+                    <input type="text" name="username" maxlength="24" autocapitalize="off" autocomplete="username" required>
+                </label>
+                <label>Password
+                    <input type="password" name="password" minlength="6" autocomplete="new-password" required>
+                </label>
+                {% if error %}<p class="auth-error">{{ error }}</p>{% endif %}
+                <button class="btn btn-primary" type="submit">Join the wall</button>
+            </form>
+            <p class="auth-switch">Already here? <a href="{{ url_for('login', next=request.args.get('next')) }}">Sign in</a></p>
+            {% else %}
+            <h1>Sign in</h1>
+            <p class="auth-lead">Welcome back to the machine.</p>
+            <form method="post" class="auth-form">
+                <label>Username
+                    <input type="text" name="username" autocapitalize="off" autocomplete="username" required>
+                </label>
+                <label>Password
+                    <input type="password" name="password" autocomplete="current-password" required>
+                </label>
+                {% if error %}<p class="auth-error">{{ error }}</p>{% endif %}
+                <button class="btn btn-primary" type="submit">Sign in</button>
+            </form>
+            <p class="auth-switch">New? <a href="{{ url_for('signup', next=request.args.get('next')) }}">Make an account</a></p>
+            {% endif %}
+        </div>
+    </main>
+</body>
+</html>

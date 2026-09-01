@@ -12,6 +12,7 @@
     let abort = null;
     let genSeq = 0;
     let zoomMode = "fit";
+    let printing = false;
 
     const dropZone = $("#drop-zone");
     const fileInput = $("#file-input");
@@ -290,7 +291,7 @@
     }
 
     function scheduleGenerate(ms) {
-        if (!currentFile) return;
+        if (!currentFile || printing) return;
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => generate({ preview: true }), ms);
     }
@@ -302,9 +303,18 @@
 
     async function generate({ preview = true, scale = null } = {}) {
         if (!currentFile) return null;
-        if (abort) abort.abort();
-        abort = new AbortController();
+        if (preview && printing) return null;
+        if (preview) {
+            if (abort) abort.abort();
+            abort = new AbortController();
+        } else {
+            printing = true;
+            clearTimeout(debounceTimer);
+            if (abort) abort.abort();
+            abort = new AbortController();
+        }
         const seq = ++genSeq;
+        const signal = abort.signal;
         setLive(true, preview ? "Typing…" : "Printing…");
 
         const formData = new FormData();
@@ -329,7 +339,7 @@
             const resp = await fetch("/convert", {
                 method: "POST",
                 body: formData,
-                signal: abort.signal,
+                signal,
             });
             const data = await resp.json();
             if (seq !== genSeq) return null;
@@ -363,6 +373,8 @@
                 toast("Network error: " + err.message, "error");
             }
             return null;
+        } finally {
+            if (!preview) printing = false;
         }
     }
 
@@ -371,7 +383,7 @@
         setLive(true, "Printing…");
         const data = await generate({ preview: false, scale });
         if (data && data.image_data) {
-            downloadUrl(data.image_data, "typewriter-drawing.png");
+            downloadUrl(data.image_data, "typewriter-drawing.jpg");
             setLive(false, "Live");
         }
     });
@@ -384,6 +396,71 @@
         URL.revokeObjectURL(url);
     });
 
+    const postBtn = $("#post-btn");
+    const postModal = $("#post-modal");
+    const postCaption = $("#post-caption");
+    if (postBtn) {
+        postBtn.addEventListener("click", () => {
+            if (!window.CARRIAGE || !window.CARRIAGE.signedIn) {
+                window.location.href = (window.CARRIAGE && window.CARRIAGE.loginUrl) || "/login?next=/studio";
+                return;
+            }
+            if (!currentImageData) {
+                toast("Type a drawing first", "error");
+                return;
+            }
+            postModal.classList.remove("hidden");
+            postCaption.focus();
+        });
+    }
+    $("#cancel-post-btn")?.addEventListener("click", () => postModal.classList.add("hidden"));
+    $("#confirm-post-btn")?.addEventListener("click", async () => {
+        if (!currentFile) return;
+        const confirmBtn = $("#confirm-post-btn");
+        confirmBtn.disabled = true;
+        clearTimeout(debounceTimer);
+        const scale = parseInt(scaleSlider.value, 10);
+        setLive(true, "Printing…");
+        let imageData = currentImageData;
+        const hi = await generate({ preview: false, scale });
+        if (hi && hi.image_data) imageData = hi.image_data;
+        if (!imageData) {
+            confirmBtn.disabled = false;
+            toast("Could not post that drawing", "error");
+            return;
+        }
+        try {
+            const resp = await fetch("/api/posts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+                body: JSON.stringify({
+                    image_data: imageData,
+                    source_data: await fileToDataUrl(currentFile),
+                    caption: postCaption.value.trim(),
+                }),
+            });
+            const data = await resp.json();
+            if (!resp.ok) {
+                confirmBtn.disabled = false;
+                if (data.login) {
+                    window.location.href = window.CARRIAGE.loginUrl;
+                    return;
+                }
+                toast(data.error || "Could not post", "error");
+                return;
+            }
+            postModal.classList.add("hidden");
+            postCaption.value = "";
+            toast("On the wall");
+            setTimeout(() => {
+                window.location.href = data.post.url;
+            }, 400);
+        } catch (err) {
+            confirmBtn.disabled = false;
+            toast("Could not post: " + err.message, "error");
+        }
+    });
+
     $("#download-text-btn").addEventListener("click", () => {
         if (!currentTextData) return;
         const blob = new Blob([currentTextData], { type: "text/plain" });
@@ -391,6 +468,26 @@
         downloadUrl(url, "typewriter-drawing.txt");
         URL.revokeObjectURL(url);
     });
+
+    async function fileToDataUrl(file) {
+        if (!file) return "";
+        try {
+            const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+            const canvas = document.createElement("canvas");
+            canvas.width = bitmap.width;
+            canvas.height = bitmap.height;
+            canvas.getContext("2d").drawImage(bitmap, 0, 0);
+            bitmap.close();
+            return canvas.toDataURL("image/jpeg", 0.88);
+        } catch (_err) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+    }
 
     function downloadUrl(href, name) {
         const a = document.createElement("a");

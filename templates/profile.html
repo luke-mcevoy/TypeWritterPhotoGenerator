@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ profile.display_name }} — Carriage</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="page-scroll">
+    <header class="topbar">
+        <a class="brand" href="{{ url_for('wall') }}">Carriage</a>
+        {% include "_nav.html" %}
+    </header>
+
+    <main class="wall">
+        <header class="wall-intro">
+            <p class="wall-kicker">@{{ profile.username }}</p>
+            <h1>{{ profile.display_name }}</h1>
+            <p class="wall-copy">{{ count }} {{ 'page' if count == 1 else 'pages' }} on the wall.</p>
+            {% if current_user and current_user.username == profile.username %}
+            <a class="btn btn-accent" href="{{ url_for('studio') }}">Type another</a>
+            {% endif %}
+        </header>
+
+        {% if posts %}
+        <section class="page-grid">
+            {% for post in posts %}
+            {% set author_mode = 'date' %}
+            {% include "_card.html" %}
+            {% endfor %}
+        </section>
+        {% else %}
+        <p class="empty-wall">No pages yet.</p>
+        {% endif %}
+    </main>
+    <script src="{{ url_for('static', filename='social.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ post.display_name }} — Carriage</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="page-scroll">
+    <header class="topbar">
+        <a class="brand" href="{{ url_for('wall') }}">Carriage</a>
+        {% include "_nav.html" %}
+    </header>
+
+    <main class="post-page">
+        <div class="post-stage">
+            {% if post.source_url %}
+            <div class="preview-tabs post-tabs">
+                <button type="button" class="tab" data-view="drawing">Drawing</button>
+                <button type="button" class="tab" data-view="photo">Photo</button>
+                <button type="button" class="tab active" data-view="both">Both</button>
+            </div>
+            {% endif %}
+            <div class="post-views">
+                <figure class="post-figure post-view{% if not post.source_url %} active{% endif %}" data-view="drawing">
+                    <img src="{{ post.image_url }}" alt="Typewriter drawing by {{ post.display_name }}">
+                </figure>
+                {% if post.source_url %}
+                <figure class="post-figure post-view" data-view="photo">
+                    <img src="{{ post.source_url }}" alt="Original photograph">
+                </figure>
+                <div class="post-view post-both active" data-view="both">
+                    <figure class="post-figure">
+                        <img src="{{ post.source_url }}" alt="Original photograph">
+                        <figcaption>Photo</figcaption>
+                    </figure>
+                    <figure class="post-figure">
+                        <img src="{{ post.image_url }}" alt="Typewriter drawing">
+                        <figcaption>Drawing</figcaption>
+                    </figure>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        <aside class="post-side">
+            <a class="page-author" href="{{ post.profile_url }}">{{ post.display_name }}</a>
+            <p class="post-when">{{ post.created_at.replace('T', ' ')[:-1] }} UTC</p>
+            {% if post.caption %}<p class="page-caption">{{ post.caption }}</p>{% endif %}
+            <div class="post-actions">
+                <button type="button" class="like-btn{% if post.liked %} on{% endif %}" data-like="{{ post.id }}" {% if not current_user %}data-need-login="1"{% endif %}>
+                    <span class="like-mark">♥</span>
+                    <span class="like-count">{{ post.like_count }}</span>
+                </button>
+                {% if post.own %}
+                <button type="button" class="btn btn-ghost" data-delete="{{ post.id }}">Take down</button>
+                {% endif %}
+            </div>
+            <a class="btn btn-accent" href="{{ url_for('studio') }}">Type a page</a>
+        </aside>
+    </main>
+    <script src="{{ url_for('static', filename='social.js') }}"></script>
+</body>
+</html>

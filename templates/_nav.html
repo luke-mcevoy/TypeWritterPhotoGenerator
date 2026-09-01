@@ -1,0 +1,11 @@
+<nav class="site-nav">
+    <a href="{{ url_for('wall') }}" class="{% if request.endpoint == 'wall' %}active{% endif %}">Wall</a>
+    <a href="{{ url_for('studio') }}" class="{% if request.endpoint == 'studio' %}active{% endif %}">Studio</a>
+    {% if current_user %}
+        <a href="{{ url_for('profile', username=current_user.username) }}">{{ current_user.display_name }}</a>
+        <a href="{{ url_for('logout') }}" class="nav-quiet">Out</a>
+    {% else %}
+        <a href="{{ url_for('login') }}">Sign in</a>
+        <a href="{{ url_for('signup') }}" class="nav-accent">Join</a>
+    {% endif %}
+</nav>

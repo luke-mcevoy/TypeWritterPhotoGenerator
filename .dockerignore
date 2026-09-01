@@ -5,6 +5,7 @@ __pycache__
 .DS_Store
 samples
 output
+data
 empire_state.jpg
 typewriter.jpg
 *.png

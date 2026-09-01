@@ -590,10 +590,11 @@ def render_page(
 ) -> Image.Image:
     """Assemble the page from glyph tiles."""
     rows, cols = primary.shape
-    font_size = max(8, int(getattr(font, "size", 16) * (1 if fast else scale)))
-    t = tightness * (0.72 if fast else 1.0)
-    cell_w = max(4, int(round(bank.cell_w * t * (1 if fast else scale))))
-    cell_h = max(5, int(round(bank.cell_h * t * (1 if fast else scale))))
+    look = 0.72 if fast else 1.0
+    font_size = max(8, int(getattr(font, "size", 16) * scale))
+    t = tightness * look
+    cell_w = max(4, int(round(bank.cell_w * t * scale)))
+    cell_h = max(5, int(round(bank.cell_h * t * scale)))
     tiles = bank.tiles(cell_w, cell_h, font_size)
 
     body = tiles[primary].transpose(0, 2, 1, 3).reshape(rows * cell_h, cols * cell_w)
@@ -717,7 +718,7 @@ class TypewriterEngine:
             gamma,
             detail,
             simplify=simplify,
-            max_side=900 if fast else 1400,
+            max_side=720 if fast else 1400,
             fast=fast,
         )
         if invert:

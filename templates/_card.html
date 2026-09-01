@@ -1,0 +1,22 @@
+<article class="page-card" data-id="{{ post.id }}">
+    <a class="page-card-image" href="{{ post.url }}">
+        <img src="{{ post.image_url }}" alt="Drawing by {{ post.display_name }}">
+    </a>
+    <div class="page-card-meta">
+        {% if author_mode == 'date' %}
+        <span class="page-author">{{ post.created_at[:10] }}</span>
+        {% else %}
+        <a class="page-author" href="{{ post.profile_url }}">{{ post.display_name }}</a>
+        {% endif %}
+        <div class="page-card-tools">
+            {% if post.own %}
+            <button type="button" class="reveal-btn" data-delete="{{ post.id }}">Remove</button>
+            {% endif %}
+            <button type="button" class="like-btn{% if post.liked %} on{% endif %}" data-like="{{ post.id }}" {% if not current_user %}data-need-login="1"{% endif %}>
+                <span class="like-mark">♥</span>
+                <span class="like-count">{{ post.like_count }}</span>
+            </button>
+        </div>
+    </div>
+    {% if post.caption %}<p class="page-caption">{{ post.caption }}</p>{% endif %}
+</article>

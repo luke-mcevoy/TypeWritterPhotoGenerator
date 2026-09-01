@@ -5,7 +5,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py ascii_engine.py typewriter_engine.py ./
+COPY app.py ascii_engine.py typewriter_engine.py db.py ./
 COPY fonts ./fonts
 COPY static ./static
 COPY templates ./templates

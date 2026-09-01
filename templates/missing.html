@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carriage</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="page-scroll">
+    <header class="topbar">
+        <a class="brand" href="{{ url_for('wall') }}">Carriage</a>
+        {% include "_nav.html" %}
+    </header>
+    <main class="auth">
+        <div class="auth-card">
+            <h1>Missing</h1>
+            <p class="auth-lead">{{ message }}</p>
+            <a class="btn btn-accent" href="{{ url_for('wall') }}">Back to the wall</a>
+        </div>
+    </main>
+</body>
+</html>

@@ -10,15 +10,17 @@
 <body>
     <div class="shell">
         <header class="topbar">
-            <div class="brand">Carriage</div>
+            <a class="brand" href="{{ url_for('wall') }}">Carriage</a>
             <div class="live-status" id="live-status">
                 <span class="live-dot"></span>
-                <span id="live-text">Live</span>
+                <span id="live-text">Studio</span>
             </div>
+            {% include "_nav.html" %}
             <div class="topbar-actions">
                 <button id="crop-btn" class="btn btn-ghost" type="button">Crop</button>
                 <button id="change-image-btn" class="btn btn-ghost" type="button">Photo</button>
-                <button id="download-image-btn" class="btn btn-accent" type="button">PNG</button>
+                <button id="download-image-btn" class="btn btn-ghost" type="button">Save</button>
+                <button id="post-btn" class="btn btn-accent" type="button">Post</button>
             </div>
         </header>
 
@@ -196,6 +198,26 @@
         </div>
     </section>
 
+    <section id="post-modal" class="crop-modal hidden">
+        <div class="crop-card post-card">
+            <h2>Post to the wall</h2>
+            <p class="auth-lead">This drawing will be visible to anyone on Carriage.</p>
+            <label class="post-caption-label">A line, if you like
+                <input type="text" id="post-caption" class="text-input" maxlength="280" placeholder="Sunday lunch, typed">
+            </label>
+            <div class="crop-actions">
+                <button id="cancel-post-btn" class="btn btn-secondary" type="button">Cancel</button>
+                <button id="confirm-post-btn" class="btn btn-primary crop-apply-btn" type="button">Post</button>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        window.CARRIAGE = {
+            signedIn: {{ "true" if current_user else "false" }},
+            loginUrl: {{ url_for("login", next="/studio") | tojson }},
+        };
+    </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>

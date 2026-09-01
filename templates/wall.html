@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carriage — the wall</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="page-scroll">
+    <header class="topbar">
+        <a class="brand" href="{{ url_for('wall') }}">Carriage</a>
+        {% include "_nav.html" %}
+    </header>
+
+    <main class="wall">
+        <header class="wall-intro">
+            <p class="wall-kicker">A shared studio</p>
+            <h1>Pages the family typed.</h1>
+            <p class="wall-copy">Drop a photograph in the studio. When the drawing looks right, post it here.</p>
+            <a class="btn btn-accent" href="{{ url_for('studio') }}">Type a page</a>
+        </header>
+
+        {% if posts %}
+        <section class="page-grid" id="page-grid">
+            {% for post in posts %}
+            {% set author_mode = 'name' %}
+            {% include "_card.html" %}
+            {% endfor %}
+        </section>
+        {% else %}
+        <p class="empty-wall">The wall is blank. Be the first to type a page.</p>
+        {% endif %}
+    </main>
+    <script src="{{ url_for('static', filename='social.js') }}"></script>
+</body>
+</html>
