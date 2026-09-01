@@ -14,10 +14,10 @@
 
     <main class="wall">
         <header class="wall-intro">
-            <p class="wall-kicker">A shared studio</p>
-            <h1>Pages the family typed.</h1>
-            <p class="wall-copy">Drop a photograph in the studio. When the drawing looks right, post it here.</p>
-            <a class="btn btn-accent" href="{{ url_for('studio') }}">Type a page</a>
+            <p class="wall-kicker">Carriage</p>
+            <h1>Photographs, redrawn in type.</h1>
+            <p class="wall-copy">A vintage machine chooses the keys for tone and line. From across the room it is a drawing. Up close it is letters. Open any page to see the photograph beside it.</p>
+            <a class="btn btn-accent" href="{{ url_for('studio') }}">Type a photograph</a>
         </header>
 
         {% if posts %}
@@ -28,7 +28,7 @@
             {% endfor %}
         </section>
         {% else %}
-        <p class="empty-wall">The wall is blank. Be the first to type a page.</p>
+        <p class="empty-wall">Nothing on the wall yet. Type a photograph to hang the first page.</p>
         {% endif %}
     </main>
     <script src="{{ url_for('static', filename='social.js') }}"></script>

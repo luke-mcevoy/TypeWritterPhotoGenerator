@@ -456,25 +456,27 @@ body.page-scroll { overflow-y: auto; }
     margin: 0 auto;
     padding: 2.2rem 1.2rem 4rem;
 }
-.wall-intro { max-width: 32rem; margin-bottom: 2.2rem; }
+.wall-intro { max-width: 36rem; margin-bottom: 2.6rem; }
 .wall-kicker {
     font-family: "Special Elite", monospace;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     color: var(--accent);
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.65rem;
 }
 .wall h1, .auth-card h1 {
     font-weight: 400;
-    font-size: 2rem;
-    letter-spacing: -0.02em;
-    margin-bottom: 0.55rem;
+    font-size: 2.05rem;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+    margin-bottom: 0.7rem;
 }
 .wall-copy, .auth-lead {
     color: var(--muted);
-    line-height: 1.45;
-    margin-bottom: 1.1rem;
+    line-height: 1.55;
+    max-width: 32rem;
+    margin-bottom: 1.25rem;
 }
 .empty-wall { color: var(--dim); font-size: 1rem; }
 
