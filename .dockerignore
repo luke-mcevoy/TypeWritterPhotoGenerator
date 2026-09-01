@@ -1,0 +1,11 @@
+.git
+.venv
+__pycache__
+*.pyc
+.DS_Store
+samples
+output
+empire_state.jpg
+typewriter.jpg
+*.png
+README.md

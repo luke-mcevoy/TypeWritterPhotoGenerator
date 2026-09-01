@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+samples/
+output/
+*.png
+empire_state.jpg
+typewriter.jpg
+!fonts/
