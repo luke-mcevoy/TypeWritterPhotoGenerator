@@ -4,17 +4,25 @@ Photographs, redrawn in type. A vintage machine chooses the keys for tone and li
 
 Join, type a photograph in the studio, and post it to a shared wall. Open any page to see the original beside the drawing.
 
-## Demo
+## Demos
 
-**Hosted app:** [https://carriage-typewriter.fly.dev](https://carriage-typewriter.fly.dev)
+Live app: **[https://carriage-typewriter.fly.dev](https://carriage-typewriter.fly.dev)**
+
+| Try this | Link |
+| --- | --- |
+| Shared wall | [carriage-typewriter.fly.dev](https://carriage-typewriter.fly.dev) |
+| Studio | [Open the studio](https://carriage-typewriter.fly.dev/studio) |
+| Fish | [Photo / Drawing / Both](https://carriage-typewriter.fly.dev/p/7) |
+| Turkey | [Photo / Drawing / Both](https://carriage-typewriter.fly.dev/p/6) |
+| Desert | [Photo / Drawing / Both](https://carriage-typewriter.fly.dev/p/8) |
+| Stevens | [Photo / Drawing / Both](https://carriage-typewriter.fly.dev/p/9) |
+| Car | [Photo / Drawing / Both](https://carriage-typewriter.fly.dev/p/10) |
+
+On a drawing page, use **Drawing**, **Photo**, and **Both** to compare the typed page with the original.
+
+To make your own: **Join** → **Studio** → drop a photo → **Post**.
 
 Fly’s free trial stops the machine every five minutes until a payment method is on the account. After that, the first visit following a quiet stretch may take a few seconds to wake.
-
-1. Open the wall.
-2. **Join** (or **Sign in**).
-3. **Studio** — drop a photo. It types as you adjust.
-4. **Post** when the page looks right.
-5. Click a drawing for **Photo / Drawing / Both**.
 
 ## Run locally
 
