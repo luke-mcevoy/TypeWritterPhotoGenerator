@@ -118,38 +118,59 @@ class ContourEngine:
         # Half-line feeds and fractional carriage offsets let keys join across
         # nominal cells. Every candidate is fitted against already printed ink.
         passes = 2 + 2 * int(np.clip(overstrike, 0, 2))
+        # Flattened glyph bank so each candidate is scored with three small
+        # matrix-vector products instead of three N×24×20 temporaries.
+        glyph_rows = glyphs.reshape(len(chars), -1)
+        glyph_rows_sq = glyph_rows * glyph_rows
+        # Summed-area table of the target: the residual under a key can never
+        # exceed the target there, so keys over near-bare paper are dropped in
+        # bulk before the fitting loop (identical to failing the mean test).
+        integral = np.pad(np.cumsum(np.cumsum(padded_target, axis=0, dtype=np.float64), axis=1), ((1, 0), (1, 0)))
         for layer in range(passes):
             positions = []
+            xs = np.arange(0, width, 12, dtype=np.float64)
             for y in range(0, height, 16):
                 row_offset = rng.uniform(0, 12)
-                for x in range(0, width, 12):
-                    px = int(np.clip(x + row_offset + rng.uniform(-3, 3), 0, width - 1))
-                    py = int(np.clip(y + (layer * 6) % 16 + rng.uniform(-3, 3), 0, height - 1))
-                    positions.append((px, py))
+                # One draw per row consumes the generator exactly as the former
+                # per-key scalar draws did (x jitter, then y jitter, per key).
+                jitter = rng.uniform(-3, 3, size=(len(xs), 2))
+                px = np.clip(xs + row_offset + jitter[:, 0], 0, width - 1).astype(int)
+                py = np.clip(y + (layer * 6) % 16 + jitter[:, 1], 0, height - 1).astype(int)
+                positions.extend(zip(px.tolist(), py.tolist()))
+            pos = np.array(positions, dtype=np.intp).reshape(-1, 2)
+            px, py = pos[:, 0], pos[:, 1]
             # Most important residual first; keys added later see the ink laid
             # down by earlier keys, including overlaps across row boundaries.
-            positions.sort(key=lambda p: float(target[min(height-1,p[1]), min(width-1,p[0])]), reverse=True)
-            for x, y in positions:
+            # Stable descending order matches list.sort(reverse=True).
+            order = np.argsort(-target[np.minimum(py, height - 1), np.minimum(px, width - 1)], kind="stable")
+            px, py = px[order], py[order]
+            # Sum of the 24×20 target window under each key, from the summed-area table.
+            window = (integral[py + 24, px + 20] - integral[py, px + 20]
+                      - integral[py + 24, px] + integral[py, px])
+            keep = window / 480 >= .012 - 1e-6
+            for x, y in zip(px[keep].tolist(), py[keep].tolist()):
                 patch = canvas[y:y + 24, x:x + 20]
                 desired = padded_target[y:y + 24, x:x + 20]
                 residual = desired - patch
-                mean = float(residual.mean())
+                mean = float(residual.sum()) / 480
                 if mean < .012:
                     continue
-                deposited = glyphs * (1 - patch)
+                # deposited_n = glyph_n * (1 - patch); every per-glyph sum below
+                # is a dot product of the flattened glyph with a local vector.
+                headroom = (1 - patch).ravel()
                 # Multiscale residual matching: pixel fit follows contours;
                 # cell-mean fit controls the amount of shade deposited.
-                gd = deposited.mean(axis=(1, 2))
-                dot = np.einsum("nij,ij->n", deposited, residual) / 480 + 5 * gd * mean
-                norm = np.einsum("nij,nij->n", deposited, deposited) / 480 + 5 * gd * gd
-                strength = np.clip(dot / np.maximum(norm, 1e-8), .60, .97)
+                gd = glyph_rows @ headroom / 480
+                dot = glyph_rows @ (headroom * residual.ravel()) / 480 + 5 * gd * mean
+                norm = glyph_rows_sq @ (headroom * headroom) / 480 + 5 * gd * gd
+                strength = np.minimum(np.maximum(dot / np.maximum(norm, 1e-8), .60), .97)
                 improvement = 2 * strength * dot - strength * strength * norm
                 # A small cost per mark leaves highlights as actual bare paper.
                 index = int(np.argmax(improvement))
                 if improvement[index] < .0008:
                     continue
                 alpha = float(strength[index])
-                patch += deposited[index] * alpha
+                patch += glyphs[index] * (1 - patch) * alpha
                 strikes.append((chars[index], x, y, alpha))
         body = canvas[12:height + 12, 10:width + 10]
         # Export scale resamples an identical strike plan.
