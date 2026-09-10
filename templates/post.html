@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ post.display_name }} — Carriage</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=inspect1">
 </head>
 <body class="page-scroll">
     <header class="topbar">
@@ -14,28 +14,29 @@
 
     <main class="post-page">
         <div class="post-stage">
-            {% if post.source_url %}
             <div class="preview-tabs post-tabs">
-                <button type="button" class="tab" data-view="drawing">Drawing</button>
+                {% if post.source_url %}
+                <button type="button" class="tab active" data-view="drawing">Drawing</button>
                 <button type="button" class="tab" data-view="photo">Photo</button>
-                <button type="button" class="tab active" data-view="both">Both</button>
+                <button type="button" class="tab" data-view="both">Both</button>
+                {% endif %}
+                <span class="post-hint">Click the page to see every key at print size</span>
             </div>
-            {% endif %}
             <div class="post-views">
-                <figure class="post-figure post-view{% if not post.source_url %} active{% endif %}" data-view="drawing">
-                    <img src="{{ post.image_url }}" alt="Typewriter drawing by {{ post.display_name }}">
+                <figure class="post-figure post-view active" data-view="drawing">
+                    <img src="{{ post.image_url }}" alt="Typewriter drawing by {{ post.display_name }}" data-inspect>
                 </figure>
                 {% if post.source_url %}
                 <figure class="post-figure post-view" data-view="photo">
-                    <img src="{{ post.source_url }}" alt="Original photograph">
+                    <img src="{{ post.source_url }}" alt="Original photograph" data-inspect>
                 </figure>
-                <div class="post-view post-both active" data-view="both">
+                <div class="post-view post-both" data-view="both">
                     <figure class="post-figure">
-                        <img src="{{ post.source_url }}" alt="Original photograph">
+                        <img src="{{ post.source_url }}" alt="Original photograph" data-inspect>
                         <figcaption>Photo</figcaption>
                     </figure>
                     <figure class="post-figure">
-                        <img src="{{ post.image_url }}" alt="Typewriter drawing">
+                        <img src="{{ post.image_url }}" alt="Typewriter drawing" data-inspect>
                         <figcaption>Drawing</figcaption>
                     </figure>
                 </div>
@@ -58,6 +59,15 @@
             <a class="btn btn-accent" href="{{ url_for('studio') }}">Type a page</a>
         </aside>
     </main>
-    <script src="{{ url_for('static', filename='social.js') }}"></script>
+    <div class="inspect hidden" id="inspect" aria-hidden="true">
+        <div class="inspect-bar">
+            <span class="inspect-label" id="inspect-label">Print size · drag to move</span>
+            <button type="button" class="inspect-close" id="inspect-close" aria-label="Close">Close</button>
+        </div>
+        <div class="inspect-scroll" id="inspect-scroll">
+            <img id="inspect-img" alt="">
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='social.js') }}?v=inspect1"></script>
 </body>
 </html>
