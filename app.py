@@ -21,6 +21,7 @@ from PIL import Image, ImageOps
 from werkzeug.exceptions import RequestEntityTooLarge
 
 import db
+import storage
 from typewriter_engine import TypewriterEngine
 
 app = Flask(__name__)
@@ -96,27 +97,123 @@ def serialize_post(row) -> dict:
         "created_at": row["created_at"],
         "like_count": row["like_count"],
         "liked": liked,
-        "image_url": url_for("post_image", post_id=row["id"]),
-        "source_url": url_for("post_source", post_id=row["id"]) if has_source else None,
+        "image_url": media_url(row["image_name"], "post_image", row["id"]),
+        "source_url": media_url(row["source_name"], "post_source", row["id"]) if has_source else None,
         "url": url_for("show_post", post_id=row["id"]),
         "profile_url": url_for("profile", username=row["username"]),
         "own": bool(g.user and g.user["username"] == row["username"]),
     }
 
 
+def media_url(name: str | None, endpoint: str, post_id: int) -> str:
+    """Public bucket URL when the object lives there, else the Flask route (local dev / legacy)."""
+    if name and storage.enabled() and not os.path.exists(os.path.join(db.POSTS_DIR, name)):
+        return storage.public_url(name)
+    return url_for(endpoint, post_id=post_id)
+
+
+def save_pil_image(image: Image.Image, max_side: int, quality: int) -> str:
+    image = ImageOps.exif_transpose(image).convert("RGB")
+    if max(image.size) > max_side:
+        image = image.copy()
+        image.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+    name = f"{uuid.uuid4().hex}.jpg"
+    buf = io.BytesIO()
+    image.save(buf, format="JPEG", quality=quality, subsampling=0)
+    storage.put_bytes(name, buf.getvalue(), "image/jpeg")
+    return name
+
+
 def save_posted_image(data_url: str, max_side: int, quality: int) -> str:
     if not data_url.startswith("data:image/"):
         raise ValueError("not an image")
     _header, b64 = data_url.split(",", 1)
-    image = ImageOps.exif_transpose(Image.open(io.BytesIO(base64.b64decode(b64)))).convert("RGB")
-    if max(image.size) > max_side:
-        image.thumbnail((max_side, max_side), Image.Resampling.BILINEAR)
-    name = f"{uuid.uuid4().hex}.jpg"
-    image.save(os.path.join(db.POSTS_DIR, name), format="JPEG", quality=quality)
-    return name
+    image = Image.open(io.BytesIO(base64.b64decode(b64)))
+    return save_pil_image(image, max_side, quality)
 
 
-MAX_POST_SIDE = 4200
+def load_request_image() -> Image.Image:
+    if "image" not in request.files:
+        raise ValueError("No image provided")
+    file = request.files["image"]
+    if not file or (file.filename == "" and not file.content_type):
+        raise ValueError("No image selected")
+    image = ImageOps.exif_transpose(Image.open(file.stream)).convert("RGB")
+    if max(image.size) > MAX_IMAGE_DIMENSION:
+        image.thumbnail((MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION), Image.LANCZOS)
+    return image
+
+
+def settings_from_request() -> dict:
+    try:
+        columns = int(request.form.get("columns", request.form.get("width", 180)))
+        contrast = float(request.form.get("contrast", 1.4))
+        brightness = float(request.form.get("brightness", 0.0))
+        detail = float(request.form.get("detail", 0.45))
+        simplify = float(request.form.get("simplify", 0.55))
+        overstrike = int(request.form.get("overstrike", 1))
+        tightness = float(request.form.get("tightness", 0.90))
+        wander = float(request.form.get("wander", 0.7))
+        pressure = float(request.form.get("pressure", 0.88))
+        scale = int(request.form.get("scale", 2))
+    except (TypeError, ValueError) as e:
+        raise ValueError("Invalid numeric setting") from e
+    return {
+        "columns": columns,
+        "charset": request.form.get("charset", request.form.get("theme", "portrait")),
+        "paper": request.form.get("paper", "cream"),
+        "ink": request.form.get("ink", request.form.get("bg_color", "blue_black")),
+        "contrast": contrast,
+        "brightness": brightness,
+        "detail": detail,
+        "simplify": simplify,
+        "overstrike": overstrike,
+        "tightness": tightness,
+        "wander": wander,
+        "pressure": pressure,
+        "scale": scale,
+        "inscription": request.form.get("inscription", "")[:240],
+        "invert": request.form.get("invert", "0") in ("1", "true", "on"),
+    }
+
+
+def render_drawing(image: Image.Image, preview: bool = False) -> tuple[Image.Image, dict]:
+    settings = settings_from_request()
+    scale = 1 if preview else 2
+    if not preview and max(image.size) > 2000:
+        image = image.copy()
+        image.thumbnail((2000, 2000), Image.Resampling.BILINEAR)
+    settings["columns"] = min(settings["columns"], 200)
+    rendered, meta = engine.convert(
+        image,
+        columns=settings["columns"],
+        charset=settings["charset"],
+        paper=settings["paper"],
+        ink=settings["ink"],
+        contrast=settings["contrast"],
+        brightness=settings["brightness"],
+        detail=settings["detail"],
+        simplify=settings["simplify"],
+        overstrike=settings["overstrike"],
+        tightness=settings["tightness"],
+        wander=settings["wander"],
+        pressure=settings["pressure"],
+        scale=scale,
+        inscription=settings["inscription"],
+        invert=settings["invert"],
+        fast=True,
+    )
+    if preview and max(rendered.size) > 900:
+        rendered = rendered.copy()
+        rendered.thumbnail((900, 900), Image.Resampling.BILINEAR)
+    elif not preview and max(rendered.size) > 3200:
+        rendered = rendered.copy()
+        rendered.thumbnail((3200, 3200), Image.Resampling.LANCZOS)
+    return rendered, meta
+
+
+MAX_POST_SIDE = 4800
+MAX_SOURCE_SIDE = 2400
 
 
 @app.route("/")
@@ -218,7 +315,7 @@ def post_image(post_id):
     row = db.get_post(post_id)
     if row is None:
         return "Not found", 404
-    return send_from_directory(db.POSTS_DIR, row["image_name"])
+    return serve_media(row["image_name"])
 
 
 @app.route("/media/posts/<int:post_id>/photo")
@@ -226,27 +323,46 @@ def post_source(post_id):
     row = db.get_post(post_id)
     if row is None or not row["source_name"]:
         return "Not found", 404
-    return send_from_directory(db.POSTS_DIR, row["source_name"])
+    return serve_media(row["source_name"])
+
+
+def serve_media(name: str):
+    if os.path.exists(os.path.join(db.POSTS_DIR, name)):
+        return send_from_directory(db.POSTS_DIR, name)
+    if storage.enabled():
+        return redirect(storage.public_url(name), code=302)
+    return "Not found", 404
 
 
 @app.route("/api/posts", methods=["POST"])
 @login_required
 def api_create_post():
+    caption = (request.form.get("caption") or "").strip()
     payload = request.get_json(silent=True) or {}
-    caption = (payload.get("caption") or "").strip()
+    if not caption:
+        caption = (payload.get("caption") or "").strip()
     if len(caption) > 280:
         return jsonify({"error": "Caption is too long"}), 400
+
     try:
-        name = save_posted_image(payload.get("image_data") or "", MAX_POST_SIDE, 92)
-    except Exception:
-        return jsonify({"error": "No drawing to post"}), 400
-    source_name = None
-    source_data = payload.get("source_data") or ""
-    if source_data:
-        try:
-            source_name = save_posted_image(source_data, 1600, 82)
-        except Exception:
-            source_name = None
+        if "image" in request.files and request.files["image"]:
+            source = load_request_image()
+        elif payload.get("source_data"):
+            source = ImageOps.exif_transpose(
+                Image.open(io.BytesIO(base64.b64decode(payload["source_data"].split(",", 1)[1])))
+            ).convert("RGB")
+            if max(source.size) > MAX_IMAGE_DIMENSION:
+                source.thumbnail((MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION), Image.LANCZOS)
+        else:
+            return jsonify({"error": "Send the photograph so the machine can print the page"}), 400
+        rendered, _meta = render_drawing(source, preview=False)
+        name = save_pil_image(rendered, MAX_POST_SIDE, 95)
+        source_name = save_pil_image(source, MAX_SOURCE_SIDE, 90)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Could not print the page: {e}"}), 500
+
     post_id = db.create_post(g.user["id"], caption, name, source_name)
     row = db.get_post(post_id, viewer_id=g.user["id"])
     return jsonify({"ok": True, "post": serialize_post(row)})
@@ -259,11 +375,7 @@ def api_delete_post(post_id):
     if row is None:
         return jsonify({"error": "You can only take down your own page"}), 403
     for key in ("image_name", "source_name"):
-        name = row[key]
-        if name:
-            path = os.path.join(db.POSTS_DIR, name)
-            if os.path.exists(path):
-                os.remove(path)
+        storage.delete(row[key])
     return jsonify({"ok": True})
 
 
@@ -277,83 +389,25 @@ def api_like(post_id):
 
 @app.route("/convert", methods=["POST"])
 def convert():
-    if "image" not in request.files:
-        return jsonify({"error": "No image provided"}), 400
-
-    file = request.files["image"]
-    if file.filename == "":
-        return jsonify({"error": "No image selected"}), 400
-
     try:
-        image = ImageOps.exif_transpose(Image.open(file.stream)).convert("RGB")
+        image = load_request_image()
     except Exception as e:
         return jsonify({"error": f"Invalid image: {e}"}), 400
 
-    if max(image.size) > MAX_IMAGE_DIMENSION:
-        image.thumbnail((MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION), Image.LANCZOS)
-
-    try:
-        columns = int(request.form.get("columns", request.form.get("width", 180)))
-        contrast = float(request.form.get("contrast", 1.4))
-        brightness = float(request.form.get("brightness", 0.0))
-        detail = float(request.form.get("detail", 0.45))
-        simplify = float(request.form.get("simplify", 0.55))
-        overstrike = int(request.form.get("overstrike", 1))
-        tightness = float(request.form.get("tightness", 0.90))
-        wander = float(request.form.get("wander", 0.7))
-        pressure = float(request.form.get("pressure", 0.88))
-        scale = int(request.form.get("scale", 2))
-    except (TypeError, ValueError):
-        return jsonify({"error": "Invalid numeric setting"}), 400
-
-    charset = request.form.get("charset", request.form.get("theme", "portrait"))
-    paper = request.form.get("paper", "cream")
-    ink = request.form.get("ink", request.form.get("bg_color", "blue_black"))
-    inscription = request.form.get("inscription", "")[:240]
-    invert = request.form.get("invert", "0") in ("1", "true", "on")
-
     preview = request.form.get("preview", "0") in ("1", "true", "on")
-    if preview:
-        scale = 1
-    else:
-        scale = max(2, min(4, scale))
-
     try:
-        rendered, meta = engine.convert(
-            image,
-            columns=columns,
-            charset=charset,
-            paper=paper,
-            ink=ink,
-            contrast=contrast,
-            brightness=brightness,
-            detail=detail,
-            simplify=simplify,
-            overstrike=overstrike,
-            tightness=tightness,
-            wander=wander,
-            pressure=pressure,
-            scale=scale,
-            inscription=inscription,
-            invert=invert,
-            fast=True,
-        )
+        rendered, meta = render_drawing(image, preview=preview)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": f"Could not draw the page: {e}"}), 500
-
-    if preview and max(rendered.size) > 900:
-        rendered = rendered.copy()
-        rendered.thumbnail((900, 900), Image.Resampling.BILINEAR)
-    elif not preview and max(rendered.size) > 2800:
-        rendered = rendered.copy()
-        rendered.thumbnail((2800, 2800), Image.Resampling.LANCZOS)
 
     buf = io.BytesIO()
     if preview:
         rendered.save(buf, format="JPEG", quality=62)
         mime = "image/jpeg"
     else:
-        rendered.save(buf, format="JPEG", quality=88)
+        rendered.save(buf, format="JPEG", quality=95, subsampling=0)
         mime = "image/jpeg"
     buf.seek(0)
     img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")

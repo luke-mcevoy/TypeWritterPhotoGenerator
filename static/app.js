@@ -318,7 +318,7 @@
         setLive(true, preview ? "Typing…" : "Printing…");
 
         const formData = new FormData();
-        formData.append("image", currentFile);
+        appendImage(formData, currentFile);
         formData.append("columns", columnsSlider.value);
         formData.append("charset", charsetSelect.value);
         formData.append("paper", paperSelect.value);
@@ -350,8 +350,7 @@
             }
             currentHtmlData = data.html_data;
             currentTextData = data.text_data;
-            if (!preview) currentImageData = data.image_data;
-            else currentImageData = data.image_data;
+            currentImageData = data.image_data;
 
             glyphImage.onload = () => applyZoom(zoomMode);
             glyphImage.src = data.image_data;
@@ -421,25 +420,38 @@
         clearTimeout(debounceTimer);
         const scale = parseInt(scaleSlider.value, 10);
         setLive(true, "Printing…");
-        let imageData = currentImageData;
-        const hi = await generate({ preview: false, scale });
-        if (hi && hi.image_data) imageData = hi.image_data;
-        if (!imageData) {
-            confirmBtn.disabled = false;
-            toast("Could not post that drawing", "error");
-            return;
-        }
         try {
+            const formData = new FormData();
+            appendImage(formData, currentFile);
+            formData.append("caption", postCaption.value.trim());
+            formData.append("columns", columnsSlider.value);
+            formData.append("charset", charsetSelect.value);
+            formData.append("paper", paperSelect.value);
+            formData.append("ink", inkSelect.value);
+            formData.append("contrast", contrastSlider.value);
+            formData.append("detail", detailSlider.value);
+            formData.append("simplify", simplifySlider.value);
+            formData.append("overstrike", overstrikeSlider.value);
+            formData.append("pressure", pressureSlider.value);
+            formData.append("wander", wanderSlider.value);
+            formData.append("scale", String(scale));
+            formData.append("tightness", "0.90");
+            formData.append("inscription", inscriptionInput.value.trim());
+            formData.append("invert", invertCheck.checked ? "1" : "0");
             const resp = await fetch("/api/posts", {
                 method: "POST",
-                headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
-                body: JSON.stringify({
-                    image_data: imageData,
-                    source_data: await fileToDataUrl(currentFile),
-                    caption: postCaption.value.trim(),
-                }),
+                headers: { "X-Requested-With": "fetch" },
+                body: formData,
             });
-            const data = await resp.json();
+            const raw = await resp.text();
+            let data = {};
+            try {
+                data = raw ? JSON.parse(raw) : {};
+            } catch (_err) {
+                confirmBtn.disabled = false;
+                toast("The press ran out of memory. Try again in a moment.", "error");
+                return;
+            }
             if (!resp.ok) {
                 confirmBtn.disabled = false;
                 if (data.login) {
@@ -458,6 +470,8 @@
         } catch (err) {
             confirmBtn.disabled = false;
             toast("Could not post: " + err.message, "error");
+        } finally {
+            setLive(false, "Live");
         }
     });
 
@@ -469,10 +483,15 @@
         URL.revokeObjectURL(url);
     });
 
+    function appendImage(formData, file) {
+        const name = (file && file.name) || "photo.jpg";
+        formData.append("image", file, name);
+    }
+
     async function fileToDataUrl(file) {
         if (!file) return "";
         try {
-            const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+            const bitmap = await createImageBitmap(file);
             const canvas = document.createElement("canvas");
             canvas.width = bitmap.width;
             canvas.height = bitmap.height;
