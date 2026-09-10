@@ -119,6 +119,7 @@ body.has-file .topbar-actions { visibility: visible; }
 }
 
 .control-group { margin-bottom: 0.95rem; }
+.control-hint { font-size: .72rem; line-height: 1.5; color: var(--muted); margin: .35rem 0 0; }
 .control-group label {
     display: flex;
     justify-content: space-between;

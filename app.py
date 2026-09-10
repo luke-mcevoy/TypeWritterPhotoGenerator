@@ -1,10 +1,12 @@
 import base64
 import io
+import math
 import os
 import re
 import secrets
 import uuid
 from functools import wraps
+from threading import BoundedSemaphore
 
 from flask import (
     Flask,
@@ -18,15 +20,18 @@ from flask import (
     url_for,
 )
 from PIL import Image, ImageOps
-from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.exceptions import HTTPException, RequestEntityTooLarge, ServiceUnavailable
 
 import db
 import storage
 from typewriter_engine import TypewriterEngine
+from drawing.contour_engine import ContourEngine
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024
 engine = TypewriterEngine()
+contour_engine = ContourEngine()
+render_slot = BoundedSemaphore(1)
 
 MAX_IMAGE_DIMENSION = 4096
 USERNAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{2,23}$")
@@ -53,6 +58,11 @@ db.init_db()
 @app.errorhandler(RequestEntityTooLarge)
 def too_large(_e):
     return jsonify({"error": "That file is too large"}), 413
+
+
+@app.errorhandler(ServiceUnavailable)
+def press_busy(_e):
+    return jsonify({"error": "The typewriter is finishing another page. Trying again…"}), 503, {"Retry-After": "2"}
 
 
 @app.before_request
@@ -145,8 +155,12 @@ def load_request_image() -> Image.Image:
 
 
 def settings_from_request() -> dict:
+    drawing_style = request.form.get("drawing_style", "original")
+    if drawing_style not in ("original", "monochrome", "ribbon", "refined"):
+        raise ValueError("Unknown drawing style")
+    original = drawing_style == "original"
     try:
-        columns = int(request.form.get("columns", request.form.get("width", 180)))
+        columns = int(request.form.get("columns", request.form.get("width", 180 if original else 150)))
         contrast = float(request.form.get("contrast", 1.4))
         brightness = float(request.form.get("brightness", 0.0))
         detail = float(request.form.get("detail", 0.45))
@@ -156,13 +170,19 @@ def settings_from_request() -> dict:
         wander = float(request.form.get("wander", 0.7))
         pressure = float(request.form.get("pressure", 0.88))
         scale = int(request.form.get("scale", 2))
+        color_amount = float(request.form.get("color_amount", 0.7))
     except (TypeError, ValueError) as e:
         raise ValueError("Invalid numeric setting") from e
+    if not all(math.isfinite(n) for n in (contrast, brightness, detail, simplify,
+                                         tightness, wander, pressure, color_amount)):
+        raise ValueError("Settings must be finite numbers")
     return {
+        "drawing_style": drawing_style,
+        "color_amount": max(0, min(1, color_amount)),
         "columns": columns,
-        "charset": request.form.get("charset", request.form.get("theme", "portrait")),
-        "paper": request.form.get("paper", "cream"),
-        "ink": request.form.get("ink", request.form.get("bg_color", "blue_black")),
+        "charset": request.form.get("charset", request.form.get("theme", "portrait" if original else "classic")),
+        "paper": request.form.get("paper", "cream" if original else "white"),
+        "ink": request.form.get("ink", request.form.get("bg_color", "blue_black" if original else "carbon")),
         "contrast": contrast,
         "brightness": brightness,
         "detail": detail,
@@ -177,38 +197,42 @@ def settings_from_request() -> dict:
     }
 
 
-def render_drawing(image: Image.Image, preview: bool = False) -> tuple[Image.Image, dict]:
+def render_drawing(image: Image.Image, preview: bool = False, post: bool = False) -> tuple[Image.Image, dict]:
+    # Keep health checks responsive while bounding concurrent render memory.
+    if not render_slot.acquire(blocking=False):
+        raise ServiceUnavailable()
+    try:
+        return _render_drawing(image, preview, post)
+    finally:
+        render_slot.release()
+
+
+def _render_drawing(image: Image.Image, preview: bool = False, post: bool = False) -> tuple[Image.Image, dict]:
     settings = settings_from_request()
-    scale = 1 if preview else 2
-    if not preview and max(image.size) > 2000:
+    style = settings.pop("drawing_style")
+    color_amount = settings.pop("color_amount")
+    # Pages on the wall are always printed at the top scale; downloads honor the Print slider.
+    settings["scale"] = 1 if preview else (3 if post else max(1, min(3, settings["scale"])))
+    if max(image.size) > 2000:
         image = image.copy()
         image.thumbnail((2000, 2000), Image.Resampling.BILINEAR)
-    settings["columns"] = min(settings["columns"], 200)
-    rendered, meta = engine.convert(
-        image,
-        columns=settings["columns"],
-        charset=settings["charset"],
-        paper=settings["paper"],
-        ink=settings["ink"],
-        contrast=settings["contrast"],
-        brightness=settings["brightness"],
-        detail=settings["detail"],
-        simplify=settings["simplify"],
-        overstrike=settings["overstrike"],
-        tightness=settings["tightness"],
-        wander=settings["wander"],
-        pressure=settings["pressure"],
-        scale=scale,
-        inscription=settings["inscription"],
-        invert=settings["invert"],
-        fast=True,
-    )
-    if preview and max(rendered.size) > 900:
-        rendered = rendered.copy()
-        rendered.thumbnail((900, 900), Image.Resampling.BILINEAR)
-    elif not preview and max(rendered.size) > 3200:
-        rendered = rendered.copy()
-        rendered.thumbnail((3200, 3200), Image.Resampling.LANCZOS)
+    settings["columns"] = max(40, min(settings["columns"], 200))
+    if style == "original":
+        # Retain the original engine's bounded print path on the Fly machine.
+        settings["scale"] = 1 if preview else 2
+        rendered, meta = engine.convert(image, **settings, fast=True)
+    else:
+        settings = {key: settings[key] for key in (
+            "columns", "charset", "paper", "ink", "contrast", "simplify",
+            "overstrike", "pressure", "scale")}
+        mode = {"monochrome": "none", "ribbon": "ribbon", "refined": "layered"}[style]
+        rendered, meta = contour_engine.convert(image, **settings, color_mode=mode,
+            color_amount=color_amount, include_color_endpoints=preview)
+    side = 900 if preview else 3200
+    for page in [rendered, *meta.get("color_endpoints", [])]:
+        page.thumbnail((side, side), Image.Resampling.LANCZOS)
+    meta["drawing_style"] = style
+    meta["color_amount"] = color_amount
     return rendered, meta
 
 
@@ -355,9 +379,11 @@ def api_create_post():
                 source.thumbnail((MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION), Image.LANCZOS)
         else:
             return jsonify({"error": "Send the photograph so the machine can print the page"}), 400
-        rendered, _meta = render_drawing(source, preview=False)
+        rendered, _meta = render_drawing(source, preview=False, post=True)
         name = save_pil_image(rendered, MAX_POST_SIDE, 95)
         source_name = save_pil_image(source, MAX_SOURCE_SIDE, 90)
+    except HTTPException:
+        raise
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
@@ -397,13 +423,18 @@ def convert():
     preview = request.form.get("preview", "0") in ("1", "true", "on")
     try:
         rendered, meta = render_drawing(image, preview=preview)
+    except HTTPException:
+        raise
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": f"Could not draw the page: {e}"}), 500
 
     buf = io.BytesIO()
-    if preview:
+    if meta["drawing_style"] != "original":
+        rendered.save(buf, format="PNG")
+        mime = "image/png"
+    elif preview:
         rendered.save(buf, format="JPEG", quality=62)
         mime = "image/jpeg"
     else:
@@ -417,6 +448,9 @@ def convert():
             "image_data": f"data:{mime};base64,{img_b64}",
             "html_data": meta["html"],
             "text_data": meta["text"],
+            "drawing_style": meta["drawing_style"],
+            "color_amount": meta["color_amount"],
+            "color_endpoints": [image_data_url(page) for page in meta.get("color_endpoints", [])],
             "dimensions": {
                 "img_width": rendered.width,
                 "img_height": rendered.height,
@@ -426,6 +460,12 @@ def convert():
             },
         }
     )
+
+
+def image_data_url(image: Image.Image) -> str:
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
 
 
 @app.route("/health")

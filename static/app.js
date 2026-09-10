@@ -13,6 +13,8 @@
     let genSeq = 0;
     let zoomMode = "fit";
     let printing = false;
+    let colorEndpoints = null;
+    const colorCanvas = document.createElement("canvas");
 
     const dropZone = $("#drop-zone");
     const fileInput = $("#file-input");
@@ -43,6 +45,38 @@
     const inkSelect = $("#ink-select");
     const inscriptionInput = $("#inscription-input");
     const invertCheck = $("#invert-check");
+    const drawingStyle = $("#drawing-style");
+    const colorAmountSlider = $("#color-amount-slider");
+
+    function syncDrawingStyle() {
+        const original = drawingStyle.value === "original";
+        $("#color-controls").classList.toggle("hidden", !["refined", "ribbon"].includes(drawingStyle.value));
+        $$(".original-only").forEach(el => el.classList.toggle("hidden", !original));
+        $$(".contour-only").forEach(el => el.classList.toggle("hidden", original));
+        $("#download-text-btn").classList.toggle("hidden", !original || !currentTextData);
+        $("#download-html-btn").classList.toggle("hidden", !original || !currentHtmlData);
+    }
+
+    function paintColor() {
+        $("#color-amount-value").value = `${colorAmountSlider.value}%`;
+        colorAmountSlider.setAttribute("aria-valuetext", `${colorAmountSlider.value}% color`);
+        if (!colorEndpoints) return;
+        const context = colorCanvas.getContext("2d");
+        const [mono, full] = colorEndpoints;
+        colorCanvas.width = mono.naturalWidth;
+        colorCanvas.height = mono.naturalHeight;
+        context.drawImage(mono, 0, 0);
+        context.globalAlpha = Number(colorAmountSlider.value) / 100;
+        context.drawImage(full, 0, 0);
+        context.globalAlpha = 1;
+        currentImageData = colorCanvas.toDataURL("image/png");
+        glyphImage.src = sideGlyph.src = currentImageData;
+    }
+
+    colorAmountSlider.addEventListener("input", paintColor);
+    drawingStyle.addEventListener("change", syncDrawingStyle);
+    syncDrawingStyle();
+    paintColor();
 
     const PRESETS = {
         study: {
@@ -91,7 +125,7 @@
         },
         exhibition: {
             charset: "scene",
-            columns: 220,
+            columns: 200,
             contrast: 1.4,
             detail: 0.3,
             simplify: 0.7,
@@ -234,10 +268,11 @@
         paperSelect,
         inkSelect,
         invertCheck,
+        drawingStyle,
     ];
     liveControls.forEach((el) => {
-        el.addEventListener("input", () => scheduleGenerate(70));
-        el.addEventListener("change", () => scheduleGenerate(40));
+        el.addEventListener("input", () => scheduleGenerate(350));
+        el.addEventListener("change", () => scheduleGenerate(250));
     });
     inscriptionInput.addEventListener("input", () => scheduleGenerate(500));
 
@@ -292,6 +327,8 @@
 
     function scheduleGenerate(ms) {
         if (!currentFile || printing) return;
+        colorEndpoints = null;
+        ++genSeq;
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => generate({ preview: true }), ms);
     }
@@ -301,42 +338,47 @@
         liveText.textContent = label;
     }
 
+    function setPrinting(busy) {
+        printing = busy;
+        $$(".rail input, .rail select, .preset, #file-input, #download-image-btn, #post-btn, #crop-btn, #change-image-btn, #apply-crop-btn")
+            .forEach(el => { el.disabled = busy; });
+    }
+
+    async function submitDrawing(url, options) {
+        for (let attempt = 0; ; attempt++) {
+            const response = await fetch(url, options);
+            if (response.status !== 503 || !response.headers.has("Retry-After") || attempt >= 30) return response;
+            await response.text();
+            setLive(true, "Waiting for the typewriter…");
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+    }
+
     async function generate({ preview = true, scale = null } = {}) {
         if (!currentFile) return null;
-        if (preview && printing) return null;
+        if (printing) return null;
+        const savedPreviewEndpoints = colorEndpoints;
         if (preview) {
             if (abort) abort.abort();
             abort = new AbortController();
         } else {
-            printing = true;
+            setPrinting(true);
             clearTimeout(debounceTimer);
             if (abort) abort.abort();
             abort = new AbortController();
         }
         const seq = ++genSeq;
+        colorEndpoints = null;
         const signal = abort.signal;
         setLive(true, preview ? "Typing…" : "Printing…");
 
         const formData = new FormData();
         appendImage(formData, currentFile);
-        formData.append("columns", columnsSlider.value);
-        formData.append("charset", charsetSelect.value);
-        formData.append("paper", paperSelect.value);
-        formData.append("ink", inkSelect.value);
-        formData.append("contrast", contrastSlider.value);
-        formData.append("detail", detailSlider.value);
-        formData.append("simplify", simplifySlider.value);
-        formData.append("overstrike", overstrikeSlider.value);
-        formData.append("pressure", pressureSlider.value);
-        formData.append("wander", wanderSlider.value);
-        formData.append("scale", scale == null ? scaleSlider.value : String(scale));
-        formData.append("tightness", "0.90");
-        formData.append("inscription", inscriptionInput.value.trim());
-        formData.append("invert", invertCheck.checked ? "1" : "0");
+        appendSettings(formData, scale);
         formData.append("preview", preview ? "1" : "0");
 
         try {
-            const resp = await fetch("/convert", {
+            const resp = await submitDrawing("/convert", {
                 method: "POST",
                 body: formData,
                 signal,
@@ -348,6 +390,16 @@
                 toast(data.error || "The machine jammed", "error");
                 return null;
             }
+            let endpoints = null;
+            if (preview && data.color_endpoints?.length === 2) {
+                endpoints = await Promise.all(data.color_endpoints.map(async url => {
+                    const picture = new Image();
+                    picture.src = url;
+                    await picture.decode();
+                    return picture;
+                }));
+                if (seq !== genSeq) return null;
+            }
             currentHtmlData = data.html_data;
             currentTextData = data.text_data;
             currentImageData = data.image_data;
@@ -355,6 +407,9 @@
             glyphImage.onload = () => applyZoom(zoomMode);
             glyphImage.src = data.image_data;
             sideGlyph.src = data.image_data;
+            colorEndpoints = endpoints;
+            paintColor();
+            syncDrawingStyle();
             glyphImage.classList.remove("hidden");
             sideGlyph.classList.remove("hidden");
             glyphPlaceholder.classList.add("hidden");
@@ -373,7 +428,11 @@
             }
             return null;
         } finally {
-            if (!preview) printing = false;
+            if (!preview) {
+                setPrinting(false);
+                // Reuse the preview endpoints for instant color changes after saving.
+                colorEndpoints = savedPreviewEndpoints;
+            }
         }
     }
 
@@ -382,7 +441,8 @@
         setLive(true, "Printing…");
         const data = await generate({ preview: false, scale });
         if (data && data.image_data) {
-            downloadUrl(data.image_data, "typewriter-drawing.jpg");
+            const extension = data.image_data.startsWith("data:image/png") ? "png" : "jpg";
+            downloadUrl(data.image_data, `typewriter-drawing.${extension}`);
             setLive(false, "Live");
         }
     });
@@ -414,31 +474,21 @@
     }
     $("#cancel-post-btn")?.addEventListener("click", () => postModal.classList.add("hidden"));
     $("#confirm-post-btn")?.addEventListener("click", async () => {
-        if (!currentFile) return;
+        if (!currentFile || printing) return;
         const confirmBtn = $("#confirm-post-btn");
         confirmBtn.disabled = true;
         clearTimeout(debounceTimer);
+        if (abort) abort.abort();
+        ++genSeq;
+        setPrinting(true);
         const scale = parseInt(scaleSlider.value, 10);
         setLive(true, "Printing…");
         try {
             const formData = new FormData();
             appendImage(formData, currentFile);
             formData.append("caption", postCaption.value.trim());
-            formData.append("columns", columnsSlider.value);
-            formData.append("charset", charsetSelect.value);
-            formData.append("paper", paperSelect.value);
-            formData.append("ink", inkSelect.value);
-            formData.append("contrast", contrastSlider.value);
-            formData.append("detail", detailSlider.value);
-            formData.append("simplify", simplifySlider.value);
-            formData.append("overstrike", overstrikeSlider.value);
-            formData.append("pressure", pressureSlider.value);
-            formData.append("wander", wanderSlider.value);
-            formData.append("scale", String(scale));
-            formData.append("tightness", "0.90");
-            formData.append("inscription", inscriptionInput.value.trim());
-            formData.append("invert", invertCheck.checked ? "1" : "0");
-            const resp = await fetch("/api/posts", {
+            appendSettings(formData, scale);
+            const resp = await submitDrawing("/api/posts", {
                 method: "POST",
                 headers: { "X-Requested-With": "fetch" },
                 body: formData,
@@ -471,6 +521,8 @@
             confirmBtn.disabled = false;
             toast("Could not post: " + err.message, "error");
         } finally {
+            confirmBtn.disabled = false;
+            setPrinting(false);
             setLive(false, "Live");
         }
     });
@@ -486,6 +538,22 @@
     function appendImage(formData, file) {
         const name = (file && file.name) || "photo.jpg";
         formData.append("image", file, name);
+    }
+
+    function appendSettings(formData, scale = null) {
+        const values = {
+            drawing_style: drawingStyle.value,
+            color_amount: Number(colorAmountSlider.value) / 100,
+            columns: columnsSlider.value, charset: charsetSelect.value,
+            paper: paperSelect.value, ink: inkSelect.value,
+            contrast: contrastSlider.value, detail: detailSlider.value,
+            simplify: simplifySlider.value, overstrike: overstrikeSlider.value,
+            pressure: pressureSlider.value, wander: wanderSlider.value,
+            scale: scale == null ? scaleSlider.value : scale,
+            tightness: "0.90", inscription: inscriptionInput.value.trim(),
+            invert: invertCheck.checked ? "1" : "0",
+        };
+        Object.entries(values).forEach(([key, value]) => formData.append(key, String(value)));
     }
 
     async function fileToDataUrl(file) {

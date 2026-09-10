@@ -28,24 +28,44 @@
             <aside class="rail">
                 <div class="preset-row">
                     <button type="button" class="preset" data-preset="study">Study</button>
-                    <button type="button" class="preset active" data-preset="portrait">Portrait</button>
+                    <button type="button" class="preset" data-preset="portrait">Portrait</button>
                     <button type="button" class="preset" data-preset="scene">Scene</button>
                     <button type="button" class="preset" data-preset="architecture">Building</button>
                 </div>
 
                 <div class="control-group">
+                    <label for="drawing-style"><span class="label-text">Drawing style</span></label>
+                    <div class="select-wrapper">
+                        <select id="drawing-style">
+                            <option value="refined" selected>Refined color</option>
+                            <option value="ribbon">Earlier color</option>
+                            <option value="monochrome">New monochrome</option>
+                            <option value="original">Original algorithm</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="control-group" id="color-controls">
+                    <label for="color-amount-slider">
+                        <span class="label-text">Color amount</span>
+                        <output class="label-value" id="color-amount-value" for="color-amount-slider">70%</output>
+                    </label>
+                    <input type="range" id="color-amount-slider" min="0" max="100" value="70" step="1">
+                    <p class="control-hint">0% no color · 100% full color.<br>Outlines and shadows stay fixed.</p>
+                </div>
+
+                <div class="control-group">
                     <label>
                         <span class="label-text">Columns</span>
-                        <span class="label-value" id="columns-value">180</span>
+                        <span class="label-value" id="columns-value">150</span>
                     </label>
-                    <input type="range" id="columns-slider" min="80" max="280" value="180" step="10">
+                    <input type="range" id="columns-slider" min="80" max="200" value="150" step="10">
                 </div>
                 <div class="control-group">
                     <label>
                         <span class="label-text">Simplify</span>
-                        <span class="label-value" id="simplify-value">0.40</span>
+                        <span class="label-value" id="simplify-value">0.55</span>
                     </label>
-                    <input type="range" id="simplify-slider" min="0" max="1" value="0.4" step="0.05">
+                    <input type="range" id="simplify-slider" min="0" max="1" value="0.55" step="0.05">
                 </div>
                 <div class="control-group">
                     <label>
@@ -62,10 +82,10 @@
                         <label><span class="label-text">Keys</span></label>
                         <div class="select-wrapper">
                             <select id="charset-select">
-                                <option value="portrait" selected>Portrait</option>
+                                <option value="portrait">Portrait</option>
                                 <option value="scene">Scene</option>
                                 <option value="architecture">Building</option>
-                                <option value="classic">Classic</option>
+                                <option value="classic" selected>Classic</option>
                                 <option value="heavy">Heavy</option>
                             </select>
                         </div>
@@ -74,9 +94,9 @@
                         <label><span class="label-text">Paper</span></label>
                         <div class="select-wrapper">
                             <select id="paper-select">
-                                <option value="cream" selected>Cream</option>
+                                <option value="cream">Cream</option>
                                 <option value="ivory">Ivory</option>
-                                <option value="white">White</option>
+                                <option value="white" selected>White</option>
                                 <option value="aged">Aged</option>
                             </select>
                         </div>
@@ -85,14 +105,14 @@
                         <label><span class="label-text">Ribbon</span></label>
                         <div class="select-wrapper">
                             <select id="ink-select">
-                                <option value="blue_black" selected>Blue-black</option>
-                                <option value="carbon">Carbon</option>
+                                <option value="blue_black">Blue-black</option>
+                                <option value="carbon" selected>Carbon</option>
                                 <option value="navy">Navy</option>
                                 <option value="sepia">Sepia</option>
                             </select>
                         </div>
                     </div>
-                    <div class="control-group">
+                    <div class="control-group original-only hidden">
                         <label>
                             <span class="label-text">Detail</span>
                             <span class="label-value" id="detail-value">0.40</span>
@@ -113,31 +133,31 @@
                         </label>
                         <input type="range" id="pressure-slider" min="0.45" max="1.15" value="0.88" step="0.01">
                     </div>
-                    <div class="control-group">
+                    <div class="control-group original-only hidden">
                         <label>
                             <span class="label-text">Wander</span>
                             <span class="label-value" id="wander-value">0.70</span>
                         </label>
                         <input type="range" id="wander-slider" min="0" max="1.4" value="0.7" step="0.05">
                     </div>
-                    <div class="control-group">
+                    <div class="control-group contour-only">
                         <label>
                             <span class="label-text">Print</span>
                             <span class="label-value" id="scale-value">2</span>
                         </label>
                         <input type="range" id="scale-slider" min="1" max="3" value="2" step="1">
                     </div>
-                    <div class="control-group">
+                    <div class="control-group original-only hidden">
                         <label><span class="label-text">Hidden line</span></label>
                         <input type="text" id="inscription-input" class="text-input" maxlength="240" placeholder="A name in the shade">
                     </div>
-                    <label class="check-row">
+                    <label class="check-row original-only hidden">
                         <input type="checkbox" id="invert-check">
                         <span>Invert</span>
                     </label>
                     <div id="download-section" class="download-section hidden">
-                        <button id="download-text-btn" class="btn btn-secondary" type="button">TXT</button>
-                        <button id="download-html-btn" class="btn btn-secondary" type="button">HTML</button>
+                        <button id="download-text-btn" class="btn btn-secondary hidden" type="button">TXT</button>
+                        <button id="download-html-btn" class="btn btn-secondary hidden" type="button">HTML</button>
                         <div id="dimensions-info" class="dimensions-info"></div>
                     </div>
                 </details>
@@ -219,6 +239,6 @@
         };
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
-    <script src="{{ url_for('static', filename='app.js') }}?v=print3"></script>
+    <script src="{{ url_for('static', filename='app.js') }}?v=color1"></script>
 </body>
 </html>
