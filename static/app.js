@@ -354,19 +354,43 @@
         }
     }
 
+    // The server draws one page at a time and cannot cancel a render once it has
+    // started, so never have more than one request in flight. Changes made while
+    // a preview is drawing are coalesced into a single follow-up render.
+    let inflight = null;
+    let previewDirty = false;
+
     async function generate({ preview = true, scale = null } = {}) {
         if (!currentFile) return null;
         if (printing) return null;
+        if (preview && inflight) {
+            previewDirty = true;
+            return null;
+        }
+        if (!preview && inflight) {
+            setLive(true, "Finishing the preview…");
+            await inflight;
+        }
+        const run = renderRequest({ preview, scale });
+        inflight = run;
+        try {
+            return await run;
+        } finally {
+            if (inflight === run) inflight = null;
+            if (preview && previewDirty) {
+                previewDirty = false;
+                scheduleGenerate(0);
+            }
+        }
+    }
+
+    async function renderRequest({ preview, scale }) {
         const savedPreviewEndpoints = colorEndpoints;
-        if (preview) {
-            if (abort) abort.abort();
-            abort = new AbortController();
-        } else {
+        if (!preview) {
             setPrinting(true);
             clearTimeout(debounceTimer);
-            if (abort) abort.abort();
-            abort = new AbortController();
         }
+        abort = new AbortController();
         const seq = ++genSeq;
         colorEndpoints = null;
         const signal = abort.signal;
@@ -478,8 +502,13 @@
         const confirmBtn = $("#confirm-post-btn");
         confirmBtn.disabled = true;
         clearTimeout(debounceTimer);
-        if (abort) abort.abort();
+        previewDirty = false;
         ++genSeq;
+        if (inflight) {
+            // Let the current preview finish rather than polling a busy server.
+            setLive(true, "Finishing the preview…");
+            await inflight;
+        }
         setPrinting(true);
         const scale = parseInt(scaleSlider.value, 10);
         setLive(true, "Printing…");
