@@ -184,3 +184,43 @@
   available at `/review-examples/`. New crop workflow is local/GitHub only until a
   subsequent Fly deployment. Historical shadow study now explicitly disables
   shadow fill for its baseline when regenerating the cow/raven comparisons.
+
+## 2026-09-18 — full-keyboard illustration preview; repeated motifs rejected
+
+- User requested closer alignment with Cook, then explicitly rejected the first
+  new examples: too many repeated characters and insufficient detail/impact.
+  The initial region-family prototype did overconstrain selection: `c` made up
+  8,993/25,397 marks in the forest. Do not return to fixed per-surface alphabets.
+- Added optional `illustrated` mode in `drawing/illustration.py`. The corrected
+  implementation fits the full selected keyboard for both black and colored
+  impressions, uses weak direction preferences, and discourages locally repeated
+  keys only among fits within 82% of the best score. Fine tonal detail supplements
+  coarse shadows. Contours match straight, curved and punctuation glyphs.
+- Retains dark interiors, real whole-glyph ink, deterministic plans, fixed black
+  drawing across color amounts and exact lossless endpoint interpolation. Uses
+  existing Pillow/NumPy dependencies. Earlier modes' renderer paths remain intact.
+- Studio exposes `Typed illustration (preview)`; **Vibrant remains the default**.
+  No Fly deployment or production-post rewrite. This is a local study, not a
+  claim of Cook-level quality: geometry does not provide object interpretation,
+  deliberate lettering or composition; dense text and weak muted colors remain.
+- Six final source/Vibrant/preview comparisons at
+  http://127.0.0.1:8008/illustrated/ (crow, forest, brick, colored houses, SF, night).
+  Both modes use 180 columns, 70% color and identical other settings. Generator:
+  `python -m experiments.illustration_study --columns 180 PHOTO...`. Source/renderer
+  hashes and settings are in the ignored gallery manifest. Rejected snapshots
+  remain in ignored `illustrated-rejected/`; earlier drafts are not the final mode.
+- `docs/typed-illustration.md` includes assessment and committed comparison/detail
+  images. Reference artwork remains outside the repository. The new close-up
+  compares rejected 150-column and revised 180-column studies at matching page
+  width; full-source baseline/final gallery uses 180 columns for both renderers.
+- 26 application/renderer tests and 23 experiment tests pass. New checks cover
+  geometric directions, paper/highlights, dark bodies, whole-glyph color replay,
+  repeatability, scale/endpoints, bright pigment and avoiding a dominant character.
+  Studio browser check passes all styles, color fades, PNG export, mobile and
+  local authenticated posting. Gallery passes 18 versions and 36 amount/download
+  states. A test initially selected the hidden style selector before upload;
+  corrected the test to select after rendering. No product workaround was needed.
+- Disposable local Studio remains on 5012 (fresh temporary DB, no bucket); gallery
+  server remains on 8008. Preview/crop changes are being synced to GitHub; neither
+  was deployed in this session. Next iteration should address intentional object
+  construction and visual hierarchy, not just increase character diversity.

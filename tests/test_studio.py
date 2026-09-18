@@ -51,7 +51,7 @@ class StudioTests(unittest.TestCase):
     def request(self, endpoint="/convert", **settings):
         return self.client.post(endpoint, data={
             "image": (io.BytesIO(self.photo), "photo.png"), "columns": "40",
-            "drawing_style": "vibrant", "preview": "1", **settings,
+            "drawing_style": "illustrated", "preview": "1", **settings,
         })
 
     def decode(self, url):
@@ -71,7 +71,7 @@ class StudioTests(unittest.TestCase):
             self.assertEqual(self.decode(result.json["image_data"]).tobytes(), endpoint.tobytes())
 
     def test_all_styles_export_their_supported_formats(self):
-        for style in ("original", "monochrome", "ribbon", "refined", "vibrant"):
+        for style in ("original", "monochrome", "ribbon", "refined", "vibrant", "illustrated"):
             result = self.request(drawing_style=style, preview="0", color_amount=".37")
             self.assertEqual(result.status_code, 200, result.json)
             self.assertEqual(result.json["drawing_style"], style)

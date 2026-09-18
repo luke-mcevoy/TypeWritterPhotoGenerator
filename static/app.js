@@ -68,8 +68,8 @@
 
     function syncDrawingStyle() {
         const original = drawingStyle.value === "original";
-        $("#color-controls").classList.toggle("hidden", !["vibrant", "refined", "ribbon"].includes(drawingStyle.value));
-        $$(".vibrant-only").forEach(el => el.classList.toggle("hidden", drawingStyle.value !== "vibrant"));
+        $("#color-controls").classList.toggle("hidden", !["illustrated", "vibrant", "refined", "ribbon"].includes(drawingStyle.value));
+        $$(".shadow-only").forEach(el => el.classList.toggle("hidden", !["illustrated", "vibrant"].includes(drawingStyle.value)));
         $$(".original-only").forEach(el => el.classList.toggle("hidden", !original));
         $$(".contour-only").forEach(el => el.classList.toggle("hidden", original));
         $("#download-text-btn").classList.toggle("hidden", !original || !currentTextData);
@@ -428,8 +428,8 @@
     }
 
     const EXPECTED_MS = {
-        preview: { original: 2500, monochrome: 5000, ribbon: 6500, refined: 7000, vibrant: 8000 },
-        print: { original: 4000, monochrome: 7000, ribbon: 9000, refined: 8000, vibrant: 11000 },
+        preview: { original: 2500, monochrome: 5000, ribbon: 6500, refined: 7000, vibrant: 8000, illustrated: 5000 },
+        print: { original: 4000, monochrome: 7000, ribbon: 9000, refined: 8000, vibrant: 11000, illustrated: 7000 },
     };
 
     let progressClock = null;

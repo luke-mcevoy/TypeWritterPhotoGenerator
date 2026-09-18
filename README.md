@@ -36,6 +36,13 @@ The earlier **Refined color**, **Earlier color**, **New monochrome**, and
 new styles; posts use the same color setting. Existing posts are saved images
 and do not change when the renderer is updated.
 
+This checkout also includes **Typed illustration (preview)**. It fits the full
+keyboard to local shapes, discourages a single character from dominating a
+patch, and matches curves as well as straight contour strokes. It remains an
+opt-in study; Vibrant is still the default. The [comparison and limitations](docs/typed-illustration.md)
+include six photographs and a close-up. The new crop workflow and illustration
+preview have not been deployed to Fly.
+
 **More → Shadow fill** controls the extra character coverage inside dark subjects
 in Vibrant color. It prevents hollow silhouettes but can also make dark
 backgrounds dense. Color amount and Shadow fill address different parts of the
@@ -46,6 +53,7 @@ To compare the color algorithms locally:
 
 ```sh
 .venv/bin/python -m experiments.vibrant_study your-photo.jpg
+.venv/bin/python -m experiments.illustration_study --columns 180 your-photo.jpg
 .venv/bin/python -m unittest discover -s tests -v
 .venv/bin/python -m unittest discover -s experiments -p 'test_*.py'
 ```

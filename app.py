@@ -210,7 +210,7 @@ def load_request_image() -> Image.Image:
 
 def settings_from_request() -> dict:
     drawing_style = request.form.get("drawing_style", "original")
-    if drawing_style not in ("original", "monochrome", "ribbon", "refined", "vibrant"):
+    if drawing_style not in ("original", "monochrome", "ribbon", "refined", "vibrant", "illustrated"):
         raise ValueError("Unknown drawing style")
     original = drawing_style == "original"
     try:
@@ -297,7 +297,7 @@ def _render_drawing(image: Image.Image, preview: bool = False, post: bool = Fals
         settings = {key: settings[key] for key in (
             "columns", "charset", "paper", "ink", "contrast", "simplify",
             "overstrike", "pressure", "scale")}
-        mode = {"monochrome": "none", "ribbon": "ribbon", "refined": "layered", "vibrant": "vibrant"}[style]
+        mode = {"monochrome": "none", "ribbon": "ribbon", "refined": "layered", "vibrant": "vibrant", "illustrated": "illustrated"}[style]
         rendered, meta = contour_engine.convert(image, **settings, color_mode=mode,
             color_amount=color_amount, shadow_fill=shadow_fill,
             include_color_endpoints=preview, progress=report)

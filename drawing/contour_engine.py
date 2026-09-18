@@ -66,8 +66,8 @@ class ContourEngine:
         # progress(fraction, label) is called at stage boundaries and every
         # few hundred keys so the studio can show what the machine is doing.
         report = progress if callable(progress) else (lambda fraction, label: None)
-        if color_mode not in ("none", "ribbon", "layered", "vibrant"):
-            raise ValueError("color_mode must be 'none', 'ribbon', 'layered' or 'vibrant'")
+        if color_mode not in ("none", "ribbon", "layered", "vibrant", "illustrated"):
+            raise ValueError("Unknown color mode")
         color_amount = float(color_amount)
         hatch_amount = float(hatch_amount)
         if not np.isfinite(color_amount) or not np.isfinite(hatch_amount):
@@ -86,7 +86,13 @@ class ContourEngine:
         if width * height > 5_000_000:
             raise ValueError("Reduce columns for this image aspect ratio")
         report(.02, "Reading the photograph…")
-        target = drawing_target(source, (width, height), simplify, contrast)
+        plan = None
+        if color_mode == "illustrated":
+            from drawing.illustration import illustration_plan, KeySelector
+            plan = illustration_plan(source, width, height, simplify, contrast, shadow_fill)
+            target = plan.pop("target")
+        else:
+            target = drawing_target(source, (width, height), simplify, contrast)
         if color_mode == "vibrant":
             from drawing.shadow_tone import preserve_shadows
             target = preserve_shadows(source, (width, height), target, simplify, contrast,
@@ -94,6 +100,7 @@ class ContourEngine:
         target *= float(np.clip(pressure, .1, 1.2))
         report(.05, "Tracing contours…")
         chars, glyphs = _atlas(charset)
+        selector = KeySelector(plan, chars, width, height) if plan is not None else None
         canvas = np.zeros((height + 24, width + 20), np.float32)
         padded_target = np.pad(target, ((12, 12), (10, 10)))
         rng = np.random.default_rng(seed)
@@ -102,7 +109,7 @@ class ContourEngine:
         # Nonmaximum suppression thins edges so this follows a contour rather
         # than filling a thick Sobel band with letters.
         gray = np.asarray(source.convert("L").resize((width, height)), dtype=np.float32) / 255
-        gx, gy = _sobel(_blur(gray, 2.1))
+        gx, gy = _sobel(_blur(gray, 2.4 if plan is not None else 2.1))
         magnitude = np.hypot(gx, gy)
         direction = (np.rint(np.arctan2(gy, gx) / (np.pi / 4)).astype(int) % 4)
         peaks = np.zeros_like(magnitude, dtype=bool)
@@ -112,15 +119,29 @@ class ContourEngine:
             peaks |= (direction == axis) & (magnitude >= before) & (magnitude >= after)
         peaks[:12] = peaks[-12:] = False
         peaks[:, :10] = peaks[:, -10:] = False
-        yy, xx = np.where(peaks & (magnitude > max(.16, float(np.percentile(magnitude, 88)))))
+        minimum, percentile = (.22, 92) if plan is not None else (.16, 88)
+        threshold = max(minimum, float(np.percentile(magnitude, percentile)))
+        yy, xx = np.where(peaks & (magnitude > threshold))
         order = np.argsort(magnitude[yy, xx])[::-1]
         occupied = np.zeros((height, width), bool)
         line_chars, line_masks = _atlas("architecture")
+        if plan is not None:
+            # Fit curves, corners and punctuation to the actual edge shape,
+            # instead of assigning every outline one of four straight keys.
+            edge_ink = _blur(np.clip(peaks*magnitude/max(threshold, .01), 0, 1), .85)
+            edge_ink = np.pad(np.clip(edge_ink*2.8, 0, 1), ((12, 12), (10, 10)))
+            edge_indices = [line_chars.index(ch) for ch in "|/\\-_():,'" if ch in line_chars]
+            edge_masks = line_masks[edge_indices].reshape(len(edge_indices), -1)
+            edge_norms = (edge_masks*edge_masks).sum(axis=1)
         for item in order:
             x, y = int(xx[item]), int(yy[item])
             if occupied[y, x]:
                 continue
             char = ["|", "/", "-", "\\"][direction[y, x]]
+            if plan is not None:
+                desired_edge = edge_ink[y:y+24, x:x+20].ravel()
+                score = 2*(edge_masks @ desired_edge)/(edge_norms + float(desired_edge @ desired_edge) + 1e-8)
+                char = line_chars[edge_indices[int(np.argmax(score))]]
             glyph = line_masks[line_chars.index(char)]
             strength = float(np.clip(magnitude[y, x] * 1.7, .55, .94))
             patch = canvas[y:y + 24, x:x + 20]
@@ -128,9 +149,13 @@ class ContourEngine:
             strikes.append((char, x, y, strength))
             # Continuous lines can join at fractional carriage positions.
             occupied[max(0,y-4):y+5, max(0,x-4):x+5] = True
+        if plan is not None:
+            del edge_ink, edge_masks, edge_norms, edge_indices
         # Half-line feeds and fractional carriage offsets let keys join across
         # nominal cells. Every candidate is fitted against already printed ink.
         passes = 2 + 2 * int(np.clip(overstrike, 0, 2))
+        if plan is not None:
+            passes += 2
         # Share of the progress bar given to key fitting; color mixing is
         # roughly a third of the wall time when a color mode is selected.
         fit_span = .80 if color_mode == "none" else .50
@@ -146,10 +171,14 @@ class ContourEngine:
             positions = []
             xs = np.arange(0, width, 12, dtype=np.float64)
             for y in range(0, height, 16):
-                row_offset = rng.uniform(0, 12)
-                # One draw per row consumes the generator exactly as the former
-                # per-key scalar draws did (x jitter, then y jitter, per key).
-                jitter = rng.uniform(-3, 3, size=(len(xs), 2))
+                if plan is None:
+                    # Preserve the earlier modes' random sequence exactly.
+                    row_offset = rng.uniform(0, 12)
+                    jitter = rng.uniform(-3, 3, size=(len(xs), 2))
+                else:
+                    # Shared carriage drift keeps keys on a legible baseline.
+                    row_offset = (layer*5) % 12
+                    jitter = np.full((len(xs), 2), rng.uniform(-.5, .5))
                 px = np.clip(xs + row_offset + jitter[:, 0], 0, width - 1).astype(int)
                 py = np.clip(y + (layer * 6) % 16 + jitter[:, 1], 0, height - 1).astype(int)
                 positions.extend(zip(px.tolist(), py.tolist()))
@@ -179,17 +208,20 @@ class ContourEngine:
                 # deposited_n = glyph_n * (1 - patch); every per-glyph sum below
                 # is a dot product of the flattened glyph with a local vector.
                 headroom = (1 - patch).ravel()
+                rows, rows_sq = glyph_rows, glyph_rows_sq
                 # Multiscale residual matching: pixel fit follows contours;
                 # cell-mean fit controls the amount of shade deposited.
-                gd = glyph_rows @ headroom / 480
-                dot = glyph_rows @ (headroom * residual.ravel()) / 480 + 5 * gd * mean
-                norm = glyph_rows_sq @ (headroom * headroom) / 480 + 5 * gd * gd
+                gd = rows @ headroom / 480
+                dot = rows @ (headroom * residual.ravel()) / 480 + 5 * gd * mean
+                norm = rows_sq @ (headroom * headroom) / 480 + 5 * gd * gd
                 strength = np.minimum(np.maximum(dot / np.maximum(norm, 1e-8), .60), .97)
                 improvement = 2 * strength * dot - strength * strength * norm
                 # A small cost per mark leaves highlights as actual bare paper.
                 index = int(np.argmax(improvement))
                 if improvement[index] < .0008:
                     continue
+                if selector is not None:
+                    index = selector.choose(improvement, x, y)
                 alpha = float(strength[index])
                 patch += glyphs[index] * (1 - patch) * alpha
                 strikes.append((chars[index], x, y, alpha))
@@ -210,7 +242,9 @@ class ContourEngine:
         color_start = .08 + fit_span
         report(color_start, "Mixing color…" if color_mode != "none" else "Pressing the page…")
         if color_mode != "none":
-            if color_mode == "vibrant":
+            if color_mode == "illustrated":
+                from drawing.illustration import illustrated_underlay as color_underlay
+            elif color_mode == "vibrant":
                 from drawing.vibrant_color import vibrant_underlay as color_underlay
             elif color_mode == "layered":
                 from drawing.layered_color import layered_underlay as color_underlay
@@ -223,6 +257,7 @@ class ContourEngine:
 
             pixels, color_meta = color_underlay(source, width, height, paper_rgb,
                 chars, glyphs, amount=1, seed=seed, progress=color_progress,
+                **({"plan": plan} if plan is not None else {}),
                 **({"ink_rgb": ink_rgb, "hatch_amount": hatch_amount} if color_mode in ("layered", "vibrant") else {}))
             # Keep a stable set of colored marks at every amount. The control
             # fades only their contribution, leaving black hatching unchanged.

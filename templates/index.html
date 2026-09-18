@@ -40,6 +40,7 @@
                     <div class="select-wrapper">
                         <select id="drawing-style">
                             <option value="vibrant" selected>Vibrant color</option>
+                            <option value="illustrated">Typed illustration (preview)</option>
                             <option value="refined">Refined color</option>
                             <option value="ribbon">Earlier color</option>
                             <option value="monochrome">New monochrome</option>
@@ -136,13 +137,13 @@
                         </label>
                         <input type="range" id="pressure-slider" min="0.45" max="1.15" value="0.88" step="0.01">
                     </div>
-                    <div class="control-group vibrant-only">
+                    <div class="control-group shadow-only">
                         <label>
                             <span class="label-text">Dark fill</span>
                             <span class="label-value" id="shadow-fill-value">100%</span>
                         </label>
                         <input type="range" id="shadow-fill-slider" min="0" max="100" value="100" step="5">
-                        <p class="control-hint">How solid black subjects are.<br>0% outline only · 100% full body.</p>
+                        <p class="control-hint">Lower for lighter shadows.<br>Raise to fill dark subjects.</p>
                     </div>
                     <div class="control-group original-only hidden">
                         <label>
@@ -275,6 +276,6 @@
         };
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
-    <script src="{{ url_for('static', filename='app.js') }}?v=crop2"></script>
+    <script src="{{ url_for('static', filename='app.js') }}?v=illustrated1"></script>
 </body>
 </html>

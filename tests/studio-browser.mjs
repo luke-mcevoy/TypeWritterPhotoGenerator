@@ -31,9 +31,16 @@ try {
     return overlay && !overlay.hidden && pct && /\d+%/.test(pct.textContent || '');
   });
   await page.waitForFunction(() => document.querySelector('#live-text').textContent === 'Live');
+  const chooseIllustration = async () => {
+    const converted = page.waitForResponse(response => new URL(response.url()).pathname === '/convert' && response.ok());
+    await page.locator('#drawing-style').selectOption('illustrated');
+    await converted;
+    await page.waitForFunction(() => document.querySelector('#live-text').textContent === 'Live');
+  };
+  await chooseIllustration();
   assert(await page.locator('#stage-progress').evaluate(el => el.hidden));
   assert(lastPreview);
-  console.log('Initial vibrant preview loaded.');
+  console.log('Initial typed illustration preview loaded.');
   const checkColor = async amount => {
     const before = conversions.length;
     const result = await page.evaluate(async ({ amount, endpoints }) => {
@@ -73,14 +80,14 @@ try {
   assert.equal(await download.failure(), null);
   const printed = await (await printResponse).json();
   assert.equal(printed.color_amount, .23);
-  assert.equal(printed.drawing_style, 'vibrant');
+  assert.equal(printed.drawing_style, 'illustrated');
   assert(printed.dimensions.img_width > lastPreview.dimensions.img_width);
   await checkColor(37);
-  console.log('Vibrant upload, instant 0/37/100% color, matching side-by-side, PNG download and post-save color passed.');
+  console.log('Illustration upload, instant color, matching side-by-side and PNG download passed.');
 
   // Shadow fill lives inside More; open it before testing its visibility.
   await page.locator('details.more').evaluate(el => { el.open = true; });
-  for (const style of ['monochrome', 'original', 'ribbon', 'refined', 'vibrant']) {
+  for (const style of ['monochrome', 'original', 'ribbon', 'refined', 'vibrant', 'illustrated']) {
     const ready = page.waitForResponse(response => new URL(response.url()).pathname === '/convert'
       && response.ok());
     await page.locator('#drawing-style').selectOption(style);
@@ -88,8 +95,8 @@ try {
     const data = await response.json();
     assert.equal(data.drawing_style, style);
     await page.waitForFunction(() => document.querySelector('#live-text').textContent === 'Live');
-    assert.equal(await page.locator('#color-controls').isVisible(), ['ribbon', 'refined', 'vibrant'].includes(style));
-    assert.equal(await page.locator('#shadow-fill-slider').isVisible(), style === 'vibrant');
+    assert.equal(await page.locator('#color-controls').isVisible(), ['ribbon', 'refined', 'vibrant', 'illustrated'].includes(style));
+    assert.equal(await page.locator('#shadow-fill-slider').isVisible(), ['illustrated', 'vibrant'].includes(style));
     if (data.color_endpoints.length) await checkColor(37);
   }
   await page.setViewportSize({ width: 390, height: 844 });
@@ -110,6 +117,7 @@ try {
     await page.locator('#file-input').setInputFiles('output/algorithm-comparison/refined/study-2-photo.jpg');
     await page.locator('#use-full-image-btn').click();
     await page.waitForFunction(() => document.querySelector('#live-text').textContent === 'Live');
+    await chooseIllustration();
     await checkColor(37);
     await page.locator('#post-btn').click();
     await page.locator('#post-caption').fill('37% color smoke test');
@@ -133,7 +141,7 @@ try {
     });
     const posted = await postedResponse;
     assert.equal(posted.status(), 200, await posted.text());
-    assert.deepEqual(await page.evaluate(() => window.postedSettings), { color: '0.37', style: 'vibrant' });
+    assert.deepEqual(await page.evaluate(() => window.postedSettings), { color: '0.37', style: 'illustrated' });
     const data = await posted.json();
     await page.waitForURL(`${base}${data.post.url}`);
     assert.equal((await page.request.get(`${base}${data.post.image_url}`)).status(), 200);
