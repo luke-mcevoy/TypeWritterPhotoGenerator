@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Carriage</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=crop2">
 </head>
 <body>
     <div class="shell">
@@ -14,6 +14,8 @@
             <div class="live-status" id="live-status">
                 <span class="live-dot"></span>
                 <span id="live-text">Studio</span>
+                <span class="live-bar" id="live-bar" hidden><span class="live-bar-fill" id="live-bar-fill"></span></span>
+                <span class="live-pct" id="live-pct" hidden></span>
             </div>
             {% include "_nav.html" %}
             <div class="topbar-actions">
@@ -37,7 +39,8 @@
                     <label for="drawing-style"><span class="label-text">Drawing style</span></label>
                     <div class="select-wrapper">
                         <select id="drawing-style">
-                            <option value="refined" selected>Refined color</option>
+                            <option value="vibrant" selected>Vibrant color</option>
+                            <option value="refined">Refined color</option>
                             <option value="ribbon">Earlier color</option>
                             <option value="monochrome">New monochrome</option>
                             <option value="original">Original algorithm</option>
@@ -133,6 +136,14 @@
                         </label>
                         <input type="range" id="pressure-slider" min="0.45" max="1.15" value="0.88" step="0.01">
                     </div>
+                    <div class="control-group vibrant-only">
+                        <label>
+                            <span class="label-text">Dark fill</span>
+                            <span class="label-value" id="shadow-fill-value">100%</span>
+                        </label>
+                        <input type="range" id="shadow-fill-slider" min="0" max="100" value="100" step="5">
+                        <p class="control-hint">How solid black subjects are.<br>0% outline only · 100% full body.</p>
+                    </div>
                     <div class="control-group original-only hidden">
                         <label>
                             <span class="label-text">Wander</span>
@@ -177,6 +188,13 @@
                 </div>
 
                 <div class="preview-container" id="preview-container">
+                    <div id="stage-progress" class="stage-progress" hidden>
+                        <div class="stage-progress-card">
+                            <p id="stage-progress-label">Typing…</p>
+                            <div class="stage-progress-bar"><span class="stage-progress-fill" id="stage-progress-fill"></span></div>
+                            <p class="stage-progress-pct" id="stage-progress-pct">0%</p>
+                        </div>
+                    </div>
                     <div id="drop-zone" class="drop-zone">
                         <p class="drop-text">Drop a photograph</p>
                         <span class="drop-hint">It types as you adjust</span>
@@ -205,15 +223,29 @@
         </div>
     </div>
 
-    <section id="crop-section" class="crop-modal hidden">
+    <section id="crop-section" class="crop-modal hidden" role="dialog" aria-modal="true" aria-labelledby="crop-title" aria-describedby="crop-help">
         <div class="crop-card">
-            <h2>Crop</h2>
+            <h2 id="crop-title">Frame your photo</h2>
+            <p id="crop-help" class="control-hint">Drag the corners to crop, or use the full image. You can change the crop later.</p>
+            <div class="crop-toolbar">
+                <label for="crop-ratio">Shape</label>
+                <select id="crop-ratio">
+                    <option value="free">Free crop</option>
+                    <option value="1">Square</option>
+                    <option value="1.3333333333333333">Landscape 4:3</option>
+                    <option value="0.75">Portrait 3:4</option>
+                    <option value="1.7777777777777777">Wide 16:9</option>
+                </select>
+                <button id="reset-crop-btn" class="btn btn-ghost" type="button">Reset crop</button>
+                <output id="crop-size" aria-live="polite"></output>
+            </div>
             <div class="crop-container">
                 <img id="crop-image" alt="Crop">
             </div>
             <div class="crop-actions">
                 <button id="skip-crop-btn" class="btn btn-secondary" type="button">Cancel</button>
-                <button id="apply-crop-btn" class="btn btn-primary crop-apply-btn" type="button">Apply</button>
+                <button id="use-full-image-btn" class="btn btn-secondary" type="button">Use full image</button>
+                <button id="apply-crop-btn" class="btn btn-primary crop-apply-btn" type="button" disabled>Apply crop</button>
             </div>
         </div>
     </section>
@@ -225,6 +257,10 @@
             <label class="post-caption-label">A line, if you like
                 <input type="text" id="post-caption" class="text-input" maxlength="280" placeholder="Sunday lunch, typed">
             </label>
+            <div class="post-progress" id="post-progress" hidden>
+                <div class="post-progress-bar"><span class="post-progress-fill" id="post-progress-fill"></span></div>
+                <p class="post-progress-text"><span id="post-progress-label">Printing…</span> <span id="post-progress-pct"></span></p>
+            </div>
             <div class="crop-actions">
                 <button id="cancel-post-btn" class="btn btn-secondary" type="button">Cancel</button>
                 <button id="confirm-post-btn" class="btn btn-primary crop-apply-btn" type="button">Post</button>
@@ -239,6 +275,6 @@
         };
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
-    <script src="{{ url_for('static', filename='app.js') }}?v=color2"></script>
+    <script src="{{ url_for('static', filename='app.js') }}?v=crop2"></script>
 </body>
 </html>

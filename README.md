@@ -20,7 +20,37 @@ Live app: **[https://carriage-typewriter.fly.dev](https://carriage-typewriter.fl
 
 On a drawing page, use **Drawing**, **Photo**, and **Both** to compare the typed page with the original.
 
-To make your own: **Join** → **Studio** → drop a photo → **Post**.
+To make your own: **Join** → **Studio** → drop a photo → frame it → **Post**.
+
+Uploads open **Frame your photo** before rendering. Drag to crop, choose a shape
+(free, square, landscape, portrait or wide), reset the selection, or choose
+**Use full image**. The **Crop** button reopens the original photo for reframing.
+The same crop is used for previews, downloads and the posted source photograph.
+
+The Studio starts with **Vibrant color**. **Color amount** fades the colored
+character impressions from 0–100% while keeping the black drawing fixed.
+This mode preserves yellow-green foliage, uses a wider ribbon palette for
+different objects, and layers more colored impressions for stronger coverage.
+The earlier **Refined color**, **Earlier color**, **New monochrome**, and
+**Original algorithm** styles remain available. Save exports a PNG for the
+new styles; posts use the same color setting. Existing posts are saved images
+and do not change when the renderer is updated.
+
+**More → Shadow fill** controls the extra character coverage inside dark subjects
+in Vibrant color. It prevents hollow silhouettes but can also make dark
+backgrounds dense. Color amount and Shadow fill address different parts of the
+drawing. See the [algorithm review](docs/algorithm-review-2026-09-18.md) for the
+current limitations and the proposed direction toward more deliberate typed art.
+
+To compare the color algorithms locally:
+
+```sh
+.venv/bin/python -m experiments.vibrant_study your-photo.jpg
+.venv/bin/python -m unittest discover -s tests -v
+.venv/bin/python -m unittest discover -s experiments -p 'test_*.py'
+```
+
+The comparison is written to `output/algorithm-comparison/vibrant/index.html`.
 
 Fly’s free trial stops the machine every five minutes until a payment method is on the account. After that, the first visit following a quiet stretch may take a few seconds to wake.
 

@@ -4,9 +4,10 @@ import math
 import os
 import re
 import secrets
+import time
 import uuid
 from functools import wraps
-from threading import BoundedSemaphore
+from threading import BoundedSemaphore, Lock
 
 from flask import (
     Flask,
@@ -35,6 +36,59 @@ render_slot = BoundedSemaphore(1)
 
 MAX_IMAGE_DIMENSION = 4096
 USERNAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{2,23}$")
+JOB_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+
+# Render progress, keyed by a client-chosen job id. The studio polls
+# /progress/<job> while its /convert or /api/posts request is in flight.
+# Single gunicorn worker, so an in-process table is sufficient.
+_progress_lock = Lock()
+_progress: dict[str, dict] = {}
+_active_job: str | None = None
+PROGRESS_TTL = 15 * 60
+
+
+def request_job() -> str | None:
+    job = (request.form.get("job") or "").strip()
+    return job if JOB_RE.match(job) else None
+
+
+def progress_update(job: str | None, pct: float, label: str | None = None, stage: str = "rendering") -> None:
+    if not job:
+        return
+    now = time.time()
+    with _progress_lock:
+        entry = _progress.get(job)
+        if entry is None:
+            entry = _progress[job] = {"started": now, "pct": 0.0, "label": ""}
+        if stage == "error":
+            entry["pct"] = entry.get("pct", 0.0)
+        else:
+            entry["pct"] = max(entry["pct"], min(1.0, float(pct)))
+        if label:
+            entry["label"] = label
+        entry["stage"] = stage
+        entry["updated"] = now
+        stale = [key for key, item in _progress.items() if now - item.get("updated", now) > PROGRESS_TTL]
+        for key in stale:
+            del _progress[key]
+    # The render holds the GIL; a yield lets the other gunicorn thread serve
+    # /progress polls so the studio bar can move during a long print.
+    time.sleep(0)
+
+
+def progress_snapshot(job: str) -> dict:
+    now = time.time()
+    with _progress_lock:
+        entry = _progress.get(job)
+        active = _progress.get(_active_job) if _active_job and _active_job != job else None
+        out = {"job": job, "stage": "unknown"}
+        if entry:
+            out.update(stage=entry["stage"], pct=round(entry["pct"], 3), label=entry["label"],
+                       elapsed=round(now - entry["started"], 1))
+        if active and active.get("stage") == "rendering":
+            out["busy"] = {"pct": round(active["pct"], 3), "label": active["label"],
+                           "elapsed": round(now - active["started"], 1)}
+        return out
 
 
 def _secret_key() -> str:
@@ -156,7 +210,7 @@ def load_request_image() -> Image.Image:
 
 def settings_from_request() -> dict:
     drawing_style = request.form.get("drawing_style", "original")
-    if drawing_style not in ("original", "monochrome", "ribbon", "refined"):
+    if drawing_style not in ("original", "monochrome", "ribbon", "refined", "vibrant"):
         raise ValueError("Unknown drawing style")
     original = drawing_style == "original"
     try:
@@ -171,14 +225,16 @@ def settings_from_request() -> dict:
         pressure = float(request.form.get("pressure", 0.88))
         scale = int(request.form.get("scale", 2))
         color_amount = float(request.form.get("color_amount", 0.7))
+        shadow_fill = float(request.form.get("shadow_fill", 1))
     except (TypeError, ValueError) as e:
         raise ValueError("Invalid numeric setting") from e
     if not all(math.isfinite(n) for n in (contrast, brightness, detail, simplify,
-                                         tightness, wander, pressure, color_amount)):
+                                         tightness, wander, pressure, color_amount, shadow_fill)):
         raise ValueError("Settings must be finite numbers")
     return {
         "drawing_style": drawing_style,
         "color_amount": max(0, min(1, color_amount)),
+        "shadow_fill": max(0, min(1, shadow_fill)),
         "columns": columns,
         "charset": request.form.get("charset", request.form.get("theme", "portrait" if original else "classic")),
         "paper": request.form.get("paper", "cream" if original else "white"),
@@ -198,19 +254,35 @@ def settings_from_request() -> dict:
 
 
 def render_drawing(image: Image.Image, preview: bool = False, post: bool = False) -> tuple[Image.Image, dict]:
+    global _active_job
+    job = request_job()
     # Keep health checks responsive while bounding concurrent render memory.
     if not render_slot.acquire(blocking=False):
+        progress_update(job, 0.0, "Waiting for the typewriter…", stage="waiting")
         raise ServiceUnavailable()
+    _active_job = job
+    progress_update(job, 0.01, "Feeding the paper…")
     try:
-        return _render_drawing(image, preview, post)
+        return _render_drawing(image, preview, post, job=job)
+    except Exception:
+        progress_update(job, 0.0, "The machine jammed", stage="error")
+        raise
     finally:
+        if _active_job == job:
+            _active_job = None
         render_slot.release()
 
 
-def _render_drawing(image: Image.Image, preview: bool = False, post: bool = False) -> tuple[Image.Image, dict]:
+def _render_drawing(image: Image.Image, preview: bool = False, post: bool = False,
+                    job: str | None = None) -> tuple[Image.Image, dict]:
+    def report(fraction, label):
+        # Engines report 0..1 over their own work; leave headroom for encoding/upload.
+        progress_update(job, 0.01 + 0.89 * float(fraction), label)
+
     settings = settings_from_request()
     style = settings.pop("drawing_style")
     color_amount = settings.pop("color_amount")
+    shadow_fill = settings.pop("shadow_fill")
     # Pages on the wall are always printed at the top scale; downloads honor the Print slider.
     settings["scale"] = 1 if preview else (3 if post else max(1, min(3, settings["scale"])))
     if max(image.size) > 2000:
@@ -220,19 +292,22 @@ def _render_drawing(image: Image.Image, preview: bool = False, post: bool = Fals
     if style == "original":
         # Retain the original engine's bounded print path on the Fly machine.
         settings["scale"] = 1 if preview else 2
-        rendered, meta = engine.convert(image, **settings, fast=True)
+        rendered, meta = engine.convert(image, **settings, fast=True, progress=report)
     else:
         settings = {key: settings[key] for key in (
             "columns", "charset", "paper", "ink", "contrast", "simplify",
             "overstrike", "pressure", "scale")}
-        mode = {"monochrome": "none", "ribbon": "ribbon", "refined": "layered"}[style]
+        mode = {"monochrome": "none", "ribbon": "ribbon", "refined": "layered", "vibrant": "vibrant"}[style]
         rendered, meta = contour_engine.convert(image, **settings, color_mode=mode,
-            color_amount=color_amount, include_color_endpoints=preview)
+            color_amount=color_amount, shadow_fill=shadow_fill,
+            include_color_endpoints=preview, progress=report)
+    progress_update(job, 0.91, "Pulling the page…")
     side = 900 if preview else 3200
     for page in [rendered, *meta.get("color_endpoints", [])]:
         page.thumbnail((side, side), Image.Resampling.LANCZOS)
     meta["drawing_style"] = style
     meta["color_amount"] = color_amount
+    meta["shadow_fill"] = shadow_fill
     return rendered, meta
 
 
@@ -379,18 +454,24 @@ def api_create_post():
                 source.thumbnail((MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION), Image.LANCZOS)
         else:
             return jsonify({"error": "Send the photograph so the machine can print the page"}), 400
+        job = request_job()
         rendered, _meta = render_drawing(source, preview=False, post=True)
+        progress_update(job, 0.93, "Hanging it on the wall…")
         name = save_pil_image(rendered, MAX_POST_SIDE, 95)
+        progress_update(job, 0.97, "Hanging it on the wall…")
         source_name = save_pil_image(source, MAX_SOURCE_SIDE, 90)
     except HTTPException:
         raise
     except ValueError as e:
+        progress_update(request_job(), 0.0, str(e), stage="error")
         return jsonify({"error": str(e)}), 400
     except Exception as e:
+        progress_update(request_job(), 0.0, "Could not print the page", stage="error")
         return jsonify({"error": f"Could not print the page: {e}"}), 500
 
     post_id = db.create_post(g.user["id"], caption, name, source_name)
     row = db.get_post(post_id, viewer_id=g.user["id"])
+    progress_update(job, 1.0, "On the wall", stage="done")
     return jsonify({"ok": True, "post": serialize_post(row)})
 
 
@@ -430,6 +511,8 @@ def convert():
     except Exception as e:
         return jsonify({"error": f"Could not draw the page: {e}"}), 500
 
+    job = request_job()
+    progress_update(job, 0.95, "Pulling the page…")
     buf = io.BytesIO()
     if meta["drawing_style"] != "original":
         rendered.save(buf, format="PNG")
@@ -442,6 +525,7 @@ def convert():
         mime = "image/jpeg"
     buf.seek(0)
     img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+    progress_update(job, 1.0, "Live", stage="done")
 
     return jsonify(
         {
@@ -450,6 +534,7 @@ def convert():
             "text_data": meta["text"],
             "drawing_style": meta["drawing_style"],
             "color_amount": meta["color_amount"],
+            "shadow_fill": meta.get("shadow_fill", 1),
             "color_endpoints": [image_data_url(page) for page in meta.get("color_endpoints", [])],
             "dimensions": {
                 "img_width": rendered.width,
@@ -466,6 +551,15 @@ def image_data_url(image: Image.Image) -> str:
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
     return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+@app.route("/progress/<job>")
+def progress(job):
+    if not JOB_RE.match(job):
+        return jsonify({"error": "Bad job id"}), 400
+    response = jsonify(progress_snapshot(job))
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.route("/health")

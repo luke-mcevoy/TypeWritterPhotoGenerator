@@ -1,5 +1,32 @@
 # Typewriter algorithm studies
 
+The contour renderers now live in `drawing/` and are integrated with the Studio.
+The notes below also preserve the earlier exploration and comparison workflow.
+
+## Vibrant color
+
+```sh
+.venv/bin/python -m experiments.vibrant_study your-photo.jpg
+```
+
+The viewer at `output/algorithm-comparison/vibrant/index.html` compares the
+previous Refined color and new Vibrant color at the same 70% starting amount.
+Both have instant color controls and matching PNG downloads.
+
+`ContourEngine.convert(..., color_mode="vibrant", color_amount=.7)` uses nine
+fixed pigments, including yellow-green. Local hue support retains colored
+objects without the old global three-ribbon cap; three overlapping character
+feeds make their color visible at page size. Weak neutral casts, near-black
+casts and isolated specks are suppressed. Every colored pixel can be replayed
+from the recorded glyph impressions. Black contours and hatching are identical
+to Refined color, including at zero color amount. Source hue grouping is still
+geometric, and printed colors are a stylized palette rather than exact photo RGB.
+
+Five new behavioral tests in `tests/test_vibrant_color.py` cover foliage hue,
+multiple local colors, glyph replay, neutral/dark rejection, and the unchanged
+black drawing across amounts and export sizes. The app tests also exercise the
+new style through previews, PNG exports and stored posts.
+
 The visual target is James Cook's [shop gallery](https://www.jamescookartworkshop.com/collections/shop),
 especially *Empire State Building and NYC Taxi*, *Girl with a Pearl Earring*,
 and *Crossing Paths, Manhattan*. Viewed September 10, 2026. Reference artwork
@@ -146,3 +173,54 @@ from rendered geometry, glyph gradients can cancel when used as orientation,
 random top-five substitution can undo reserved whitespace, and the non-fast
 error diffusion propagates errors without updating each quantized choice as it
 goes. Fixing those helps fidelity but does not by itself provide artistic planning.
+
+## Nature, buildings and dark-subject audit (2026-09-10)
+
+Status update (2026-09-18): the shadow target is now integrated into Vibrant
+color and deployed, with a Shadow fill control. The galleries and findings
+below record the earlier comparison. See [the current review](../docs/algorithm-review-2026-09-18.md).
+
+See [SCENE_REVIEW.md](SCENE_REVIEW.md) for the findings, including failures.
+The 12-photo manifest is `scene_validation.json`; source photographs are local
+JPEGs under `output/algorithm-comparison/nature-buildings/sources/`, named with
+the manifest IDs. Each manifest entry links to its Pexels source and credits.
+With those files present, reproduce the fixed-settings audit with:
+
+```sh
+.venv/bin/python -m experiments.scene_validation
+```
+
+The overview is http://127.0.0.1:8008/nature-buildings/ when serving
+`output/algorithm-comparison` on port 8008. It provides source/Refined/Vibrant
+comparisons, per-photo sliders, 40/70/100% contact sheets, settings, hashes and
+coverage diagnostics. `--reuse` refreshes written findings and contact sheets
+without rerendering. `scene_findings.json` stores the qualitative review.
+
+`tonal_target.py` is a separate local candidate for the hollow dark objects in
+posts 30 and 31. It preserves an absolute dark-tone target alongside the
+existing contour target. The same glyph fitter supplies the additional ink.
+This began as a local candidate; the production implementation now lives in
+`drawing/shadow_tone.py`.
+
+```sh
+.venv/bin/python -m experiments.tonal_study
+.venv/bin/python -m unittest experiments.test_tonal_target
+```
+
+The shadow study expects the audit outputs plus the two public source photos
+at `/private/tmp/carriage-post30-source.jpg` and `carriage-post31-source.jpg`.
+It compares the candidate against current Vibrant at identical settings on
+all 14 photos, at http://127.0.0.1:8008/shadow-coverage/. Substitution of the
+target happens only within that experiment process. Production files are
+never rewritten. The printed color plan and amount behavior stay the same.
+
+Browser verification (local Playwright module path may be needed):
+
+```sh
+PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs node experiments/scene-browser.mjs
+```
+
+This checks all 26 individual viewers, both versions at 0/40/70/100%, sampled
+canvas pixels against lossless endpoints, download readiness, photo selection,
+overview filters and mobile width. The diagnostic percentages are not quality
+scores and should not replace visual review.

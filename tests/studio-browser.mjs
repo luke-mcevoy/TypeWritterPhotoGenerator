@@ -21,11 +21,19 @@ try {
     }
   });
   assert.equal((await page.goto(`${base}/studio`)).status(), 200);
-  assert.equal(await page.locator('#drawing-style').inputValue(), 'refined');
+  assert.equal(await page.locator('#drawing-style').inputValue(), 'vibrant');
   assert.equal(await page.locator('#color-amount-slider').inputValue(), '70');
   await page.locator('#file-input').setInputFiles('output/algorithm-comparison/refined/study-1-photo.jpg');
+  await page.locator('#use-full-image-btn').click();
+  await page.waitForFunction(() => {
+    const overlay = document.querySelector('#stage-progress');
+    const pct = document.querySelector('#live-pct');
+    return overlay && !overlay.hidden && pct && /\d+%/.test(pct.textContent || '');
+  });
   await page.waitForFunction(() => document.querySelector('#live-text').textContent === 'Live');
+  assert(await page.locator('#stage-progress').evaluate(el => el.hidden));
   assert(lastPreview);
+  console.log('Initial vibrant preview loaded.');
   const checkColor = async amount => {
     const before = conversions.length;
     const result = await page.evaluate(async ({ amount, endpoints }) => {
@@ -58,27 +66,30 @@ try {
   await page.screenshot({ path: '/private/tmp/carriage-studio-deploy.jpg', fullPage: true });
   const downloadPromise = page.waitForEvent('download');
   const printResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/convert'
-    && response.request().postData()?.includes('name="preview"\r\n\r\n0') && response.ok());
+    && response.ok());
   await page.locator('#download-image-btn').click();
   const download = await downloadPromise;
   assert.equal(download.suggestedFilename(), 'typewriter-drawing.png');
   assert.equal(await download.failure(), null);
   const printed = await (await printResponse).json();
   assert.equal(printed.color_amount, .23);
-  assert.equal(printed.drawing_style, 'refined');
+  assert.equal(printed.drawing_style, 'vibrant');
   assert(printed.dimensions.img_width > lastPreview.dimensions.img_width);
   await checkColor(37);
-  console.log('Refined upload, instant 0/37/100% color, matching side-by-side, PNG download and post-save color passed.');
+  console.log('Vibrant upload, instant 0/37/100% color, matching side-by-side, PNG download and post-save color passed.');
 
-  for (const style of ['monochrome', 'original', 'ribbon', 'refined']) {
+  // Shadow fill lives inside More; open it before testing its visibility.
+  await page.locator('details.more').evaluate(el => { el.open = true; });
+  for (const style of ['monochrome', 'original', 'ribbon', 'refined', 'vibrant']) {
     const ready = page.waitForResponse(response => new URL(response.url()).pathname === '/convert'
-      && response.ok() && response.request().postData()?.includes(`name="drawing_style"\r\n\r\n${style}`));
+      && response.ok());
     await page.locator('#drawing-style').selectOption(style);
     const response = await ready;
     const data = await response.json();
     assert.equal(data.drawing_style, style);
     await page.waitForFunction(() => document.querySelector('#live-text').textContent === 'Live');
-    assert.equal(await page.locator('#color-controls').isVisible(), ['ribbon', 'refined'].includes(style));
+    assert.equal(await page.locator('#color-controls').isVisible(), ['ribbon', 'refined', 'vibrant'].includes(style));
+    assert.equal(await page.locator('#shadow-fill-slider').isVisible(), style === 'vibrant');
     if (data.color_endpoints.length) await checkColor(37);
   }
   await page.setViewportSize({ width: 390, height: 844 });
@@ -97,15 +108,32 @@ try {
     await page.reload();
     assert(await page.evaluate(() => window.CARRIAGE.signedIn));
     await page.locator('#file-input').setInputFiles('output/algorithm-comparison/refined/study-2-photo.jpg');
+    await page.locator('#use-full-image-btn').click();
     await page.waitForFunction(() => document.querySelector('#live-text').textContent === 'Live');
     await checkColor(37);
     await page.locator('#post-btn').click();
     await page.locator('#post-caption').fill('37% color smoke test');
+    await page.evaluate(() => {
+      const originalFetch = window.fetch;
+      window.fetch = (url, options) => {
+        if (url === '/api/posts' && options?.body instanceof FormData) {
+          window.postedSettings = {
+            color: options.body.get('color_amount'), style: options.body.get('drawing_style'),
+          };
+        }
+        return originalFetch(url, options);
+      };
+    });
     const postedResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/posts' && response.request().method() === 'POST');
     await page.locator('#confirm-post-btn').click();
+    await page.waitForFunction(() => {
+      const el = document.querySelector('#post-progress');
+      const pct = document.querySelector('#post-progress-pct');
+      return el && !el.hidden && pct && /\d+%/.test(pct.textContent || '');
+    });
     const posted = await postedResponse;
     assert.equal(posted.status(), 200, await posted.text());
-    assert(posted.request().postData().includes('name="color_amount"\r\n\r\n0.37'));
+    assert.deepEqual(await page.evaluate(() => window.postedSettings), { color: '0.37', style: 'vibrant' });
     const data = await posted.json();
     await page.waitForURL(`${base}${data.post.url}`);
     assert.equal((await page.request.get(`${base}${data.post.image_url}`)).status(), 200);

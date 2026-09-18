@@ -705,12 +705,15 @@ class TypewriterEngine:
         seed: int = 7,
         match_font_size: int = 16,
         fast: bool = False,
+        progress=None,
     ) -> tuple[Image.Image, dict]:
         columns = int(max(40, min(360, columns)))
         overstrike = int(max(0, min(2, overstrike)))
         scale = int(max(1, min(4, scale)))
         simplify = float(np.clip(simplify, 0.0, 1.0))
+        report = progress if callable(progress) else (lambda fraction, label: None)
 
+        report(0.03, "Reading the photograph…")
         luma = prepare_luma(
             image,
             contrast,
@@ -746,6 +749,7 @@ class TypewriterEngine:
         rows = max(8, int(round(columns * aspect * (bank.cell_w / bank.cell_h))))
 
         rest = float(np.clip(0.15 + 0.7 * simplify, 0.0, 0.85))
+        report(0.2, "Choosing keys…")
         primary, over = assign_keys(
             luma, bank, rows, columns, overstrike=overstrike, rest=rest, seed=seed, fast=fast
         )
@@ -759,6 +763,7 @@ class TypewriterEngine:
             ) / 255.0
             primary = inscribe_text(primary, bank, inscription, small)
 
+        report(0.55, "Striking keys…")
         page = render_page(
             primary,
             over,
@@ -775,6 +780,7 @@ class TypewriterEngine:
             fast=fast,
         )
 
+        report(0.93, "Pressing the page…")
         text = grid_to_text(primary, bank)
         html = "" if fast else grid_html(
             primary,

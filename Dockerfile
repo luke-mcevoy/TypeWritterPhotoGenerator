@@ -5,7 +5,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py ascii_engine.py typewriter_engine.py db.py storage.py reprint_post.py migrate_to_bucket.py ./
+COPY app.py ascii_engine.py typewriter_engine.py db.py storage.py reprint_post.py migrate_to_bucket.py recreate_posts.py ./
 COPY drawing ./drawing
 COPY fonts ./fonts
 COPY static ./static
@@ -14,4 +14,4 @@ COPY templates ./templates
 ENV PORT=8080
 EXPOSE 8080
 
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT} --timeout 180 --workers 1 --threads 2 app:app"]
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT} --timeout 180 --workers 1 --threads 4 app:app"]

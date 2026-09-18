@@ -19,6 +19,12 @@ document.querySelectorAll('section[data-stem]').forEach(section => {
         const picture = new Image();
         picture.src = path;
         await picture.decode();
+        const decoded = document.createElement('canvas');
+        decoded.width = picture.naturalWidth;
+        decoded.height = picture.naturalHeight;
+        const context = decoded.getContext('2d');
+        context.drawImage(picture, 0, 0);
+        picture.rgba = context.getImageData(0, 0, decoded.width, decoded.height).data;
         return picture;
       })().catch(error => { cache.delete(path); throw error; });
       cache.set(path, pending);
@@ -37,11 +43,12 @@ document.querySelectorAll('section[data-stem]').forEach(section => {
     if (!endpoints) return;
     const [mono, colored] = endpoints;
     const context = canvas.getContext('2d');
-    context.globalAlpha = 1;
-    context.drawImage(mono, 0, 0);
-    context.globalAlpha = Number(slider.value) / 100;
-    context.drawImage(colored, 0, 0);
-    context.globalAlpha = 1;
+    const amount = Number(slider.value) / 100;
+    const blended = context.createImageData(canvas.width, canvas.height);
+    for (let i = 0; i < blended.data.length; i++) {
+      blended.data[i] = Math.round(mono.rgba[i]*(1-amount) + colored.rgba[i]*amount);
+    }
+    context.putImageData(blended, 0, 0);
     image.hidden = true;
     canvas.hidden = false;
     updateAmountLabel();
@@ -71,7 +78,7 @@ document.querySelectorAll('section[data-stem]').forEach(section => {
     endpoints = null;
     selected = button;
     const key = button.dataset.version;
-    const colored = key === 'color' || key === 'refined';
+    const colored = button.hasAttribute('data-color-controls') || key === 'color' || key === 'refined';
     buttons.forEach(b => b.setAttribute('aria-pressed', String(b === button)));
     section.querySelector('.showing strong').textContent = button.textContent;
     section.querySelector('.ribbons').textContent = button.dataset.ribbons;

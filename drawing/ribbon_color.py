@@ -36,8 +36,9 @@ def _color_fields(source, width, height):
 
 
 def color_underlay(source, width, height, paper_rgb, atlas_chars, atlas_masks,
-                   amount=.7, seed=7):
+                   amount=.7, seed=7, progress=None):
     """Return paper with colored strikes, plus a replayable strike list."""
+    report = progress if callable(progress) else (lambda fraction, label: None)
     amount = float(np.clip(amount, 0, 1))
     surface = np.empty((height + 24, width + 20, 3), dtype=np.float32)
     surface[:] = paper_rgb
@@ -65,7 +66,11 @@ def color_underlay(source, width, height, paper_rgb, atlas_chars, atlas_masks,
     rng = np.random.default_rng(seed + 403)
     stamps = []
     palette_used = set()
+    ribbon_total = max(1, (height - 5 + 7) // 8)
+    report(0.1, "Mixing color · ribbons")
     for row, y in enumerate(range(5, height, 8)):
+        if row and row % 10 == 0:
+            report(0.1 + 0.85 * row / ribbon_total, "Mixing color · ribbons")
         row_shift = int(rng.integers(0, 8))
         for x0 in range(0, width, 8):
             x = min(width - 1, max(0, x0 + row_shift + int(rng.integers(-2, 3))))
@@ -100,6 +105,7 @@ def color_underlay(source, width, height, paper_rgb, atlas_chars, atlas_masks,
             patch *= 1 - alpha * (1 - transmission)
             stamps.append((ch, x, py, strength, name))
             palette_used.add(name)
+    report(1.0, "Mixing color…")
     return surface[12:height + 12, 10:width + 10], {
         "ribbons": [name for name in names if name in palette_used],
         "color_strikes": stamps,

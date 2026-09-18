@@ -230,6 +230,32 @@ input[type="range"]::-webkit-slider-thumb {
     background: var(--accent);
     animation: livePulse 1s ease-out infinite;
 }
+.live-bar {
+    display: inline-block;
+    width: 90px;
+    height: 4px;
+    margin-left: 0.3rem;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+    vertical-align: middle;
+}
+.live-bar-fill {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--accent);
+    transition: width 0.35s ease-out;
+}
+.live-bar.indeterminate .live-bar-fill {
+    width: 35% !important;
+    transition: none;
+    animation: progressSlide 1.2s ease-in-out infinite;
+}
+.live-pct { color: var(--paper); min-width: 2.6em; }
+@media (max-width: 860px) {
+    .live-bar { width: 48px; }
+}
 @keyframes livePulse {
     0% { box-shadow: 0 0 0 0 rgba(196, 165, 116, 0.5); }
     70% { box-shadow: 0 0 0 7px rgba(196, 165, 116, 0); }
@@ -379,6 +405,58 @@ input[type="range"]::-webkit-slider-thumb {
 .preview-container.zoomed img { max-width: none; max-height: none; }
 .page-shot { background: var(--paper); }
 
+.stage-progress {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(16, 14, 12, 0.46);
+    z-index: 4;
+    pointer-events: none;
+}
+.stage-progress[hidden] { display: none; }
+.stage-progress-card {
+    width: min(320px, 82%);
+    padding: 1.05rem 1.15rem 0.95rem;
+    background: rgba(27, 23, 19, 0.94);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    text-align: center;
+}
+#stage-progress-label {
+    font-family: "Special Elite", monospace;
+    font-size: 0.82rem;
+    letter-spacing: 0.06em;
+    color: var(--paper);
+    margin-bottom: 0.7rem;
+}
+.stage-progress-bar {
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+}
+.stage-progress-fill {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--accent);
+    transition: width 0.25s ease-out;
+}
+.stage-progress.indeterminate .stage-progress-fill {
+    width: 35% !important;
+    transition: none;
+    animation: progressSlide 1.2s ease-in-out infinite;
+}
+.stage-progress-pct {
+    margin-top: 0.55rem;
+    font-family: "Special Elite", monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+}
+
 .side-by-side { gap: 1rem; }
 .side-pane {
     flex: 1;
@@ -428,6 +506,13 @@ input[type="range"]::-webkit-slider-thumb {
     margin-top: 0.9rem;
 }
 .crop-apply-btn { width: auto; }
+.crop-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: .75rem 0; }
+.crop-toolbar select { font: inherit; max-width: 100%; padding: .4rem; }
+#crop-size { font-size: .8rem; }
+#crop-section .crop-card { max-height: 95dvh; overflow-y: auto; }
+#crop-section .crop-container { height: min(52vh, 540px); }
+#crop-section .crop-container img { max-height: 100%; margin: auto; }
+#crop-section .crop-actions { flex-wrap: wrap; }
 .cropper-view-box { outline: 2px solid var(--accent); }
 .cropper-line, .cropper-point { background-color: var(--accent); }
 
@@ -693,6 +778,37 @@ body.page-scroll { overflow-y: auto; }
     margin: 1rem 0 1.2rem;
 }
 .post-card { width: min(480px, 100%); }
+.post-progress { margin: 0.2rem 0 1rem; }
+.post-progress-bar {
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+}
+.post-progress-fill {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--accent);
+    transition: width 0.35s ease-out;
+}
+.post-progress-text {
+    margin: 0.5rem 0 0;
+    font-family: "Special Elite", monospace;
+    font-size: 0.74rem;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+}
+#post-progress-pct { color: var(--paper); }
+.post-progress.indeterminate .post-progress-fill {
+    width: 35% !important;
+    transition: none;
+    animation: progressSlide 1.2s ease-in-out infinite;
+}
+@keyframes progressSlide {
+    0% { transform: translateX(-120%); }
+    100% { transform: translateX(280%); }
+}
 .post-caption-label {
     display: block;
     font-size: 0.72rem;

@@ -91,8 +91,10 @@ def region_plan(source, width, height):
 
 
 def layered_underlay(source, width, height, paper_rgb, atlas_chars, atlas_masks,
-                     amount=.7, seed=7, ink_rgb=(28, 22, 18), hatch_amount=.7):
+                     amount=.7, seed=7, ink_rgb=(28, 22, 18), hatch_amount=.7,
+                     progress=None):
     """Print continuous runs within selected regions, with dark overstrikes."""
+    report = progress if callable(progress) else (lambda fraction, label: None)
     surface = np.empty((height+24, width+20, 3), dtype=np.float32)
     surface[:] = paper_rgb
     amount = float(np.clip(amount, 0, 1))
@@ -100,7 +102,10 @@ def layered_underlay(source, width, height, paper_rgb, atlas_chars, atlas_masks,
     empty = {"ribbons": [], "color_strikes": [], "hatch_strikes": [], "region_count": 0}
     if amount == 0 and hatch_amount == 0:
         return surface[12:height+12, 10:width+10], empty
+    report(0.05, "Mixing color · planning")
     ids, regions, selected, hsv, gray, gx, gy, mag, texture, step = region_plan(source, width, height)
+    if amount == 0:
+        selected = set()
     paint = np.full_like(ids, -1)
     for region in regions:
         if region["accepted"] and region["ribbon"] in selected:
@@ -111,7 +116,12 @@ def layered_underlay(source, width, height, paper_rgb, atlas_chars, atlas_masks,
     used = set()
     # Runs preserve upright characters while their positions follow a local
     # slope. Rows use controlled feed and carriage offsets rather than random dots.
-    for row, y in enumerate(range(8, height-8, 15)):
+    color_rows = range(8, height-8, 15)
+    color_total = max(1, (height - 16 + 14) // 15)
+    report(0.15, "Mixing color · ribbons")
+    for row, y in enumerate(color_rows):
+        if row and row % 8 == 0:
+            report(0.15 + 0.50 * row / color_total, "Mixing color · ribbons")
         offset = int(rng.integers(0, 13))
         for start_x in range(8+offset, width-8, 60):
             cy, cx = min(y//step, ids.shape[0]-1), min(start_x//step, ids.shape[1]-1)
@@ -180,7 +190,11 @@ def layered_underlay(source, width, height, paper_rgb, atlas_chars, atlas_masks,
     shadow = np.clip((broad-gray)*2 + (1-gray)*mag*.6, 0, .65)
     hatch_strikes = []
     transmission = np.clip(np.array(ink_rgb, dtype=np.float32)/paper_rgb, 0, 1)
+    hatch_total = max(1, (height - 24 + 13) // 14)
+    report(0.70, "Mixing color · shadows")
     for row, y in enumerate(range(12, height-12, 14)):
+        if row and row % 8 == 0:
+            report(0.70 + 0.28 * row / hatch_total, "Mixing color · shadows")
         for start_x in range(12+(row%3)*3, width-12, 50):
             cy, cx = y//step, start_x//step
             if shadow[cy, cx] < .11:
@@ -207,6 +221,7 @@ def layered_underlay(source, width, height, paper_rgb, atlas_chars, atlas_masks,
                     continue
                 surface[py:py+24, x:x+20] *= 1-glyph[:, :, None]*strength*(1-transmission)
                 hatch_strikes.append((ch, x, py, strength))
+    report(1.0, "Mixing color…")
     return surface[12:height+12, 10:width+10], {
         "ribbons": [name for name in names if name in used],
         "color_strikes": strikes, "hatch_strikes": hatch_strikes,

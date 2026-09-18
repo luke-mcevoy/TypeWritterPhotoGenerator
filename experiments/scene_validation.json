@@ -1,0 +1,14 @@
+[
+  {"id":"sunlit-forest","title":"Sunlit green forest","group":"Nature","source":"https://www.pexels.com/photo/path-in-forest-in-sunlight-24706137/","author":"Arnauld van Wambeke"},
+  {"id":"forest-shadows","title":"Forest in deep shade","group":"Nature","source":"https://www.pexels.com/photo/path-in-a-forest-15603336/","author":"Jackie A"},
+  {"id":"autumn-lake","title":"Autumn trees and reflections","group":"Nature","source":"https://www.pexels.com/photo/calm-lake-surrounded-by-trees-14310629/","author":"Nikolett Emmert"},
+  {"id":"alpine-lake","title":"Alpine lake, snow and pines","group":"Nature","source":"https://www.pexels.com/photo/scenic-view-of-a-turquoise-pond-and-rocky-mountains-in-snow-12905886/","author":"Alizain Hirani"},
+  {"id":"sandstone-desert","title":"Sandstone desert and pale sky","group":"Nature","source":"https://www.pexels.com/photo/sandstone-formations-in-desert-8255530/","author":"Julya Kamenskih"},
+  {"id":"wildflower-meadow","title":"Red wildflowers and pale grasses","group":"Nature","source":"https://www.pexels.com/photo/vibrant-wildflowers-bloom-in-mountain-meadow-37924062/","author":"M e r v e"},
+  {"id":"turquoise-coast","title":"Turquoise coast and stone","group":"Nature","source":"https://www.pexels.com/photo/rocky-coast-of-turquoise-sea-4846274/","author":"Rachel Claire"},
+  {"id":"colored-houses","title":"Colored waterfront houses","group":"Buildings","source":"https://www.pexels.com/photo/colorful-houses-along-nyhavn-canal-at-sunset-35299566/"},
+  {"id":"red-brick","title":"Red brick and teal signs","group":"Buildings","source":"https://www.pexels.com/photo/facade-of-a-red-brick-building-14413019/","author":"Thomas K"},
+  {"id":"white-facade","title":"White stone facade","group":"Buildings","source":"https://www.pexels.com/photo/white-building-facade-2806058/","author":"Luis Ruiz"},
+  {"id":"glass-towers","title":"Glass and neutral city towers","group":"Buildings","source":"https://www.pexels.com/photo/modern-glass-skyscrapers-in-a-citys-downtown-5517045/","author":"Tony Mucci"},
+  {"id":"night-city","title":"Night buildings and illuminated signs","group":"Buildings","source":"https://www.pexels.com/photo/buildings-in-city-at-night-16763426/"}
+]

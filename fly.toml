@@ -28,8 +28,9 @@ primary_region = 'ewr'
     path = '/health'
 
 [[vm]]
+  size = 'performance-1x'
   memory = '2gb'
-  cpu_kind = 'shared'
+  cpu_kind = 'performance'
   cpus = 1
   memory_mb = 2048
 

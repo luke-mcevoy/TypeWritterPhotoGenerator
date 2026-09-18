@@ -62,15 +62,22 @@ class ContourEngine:
                 ink="carbon", simplify=.55, contrast=1.4, pressure=.88,
                 wander=.7, overstrike=1, seed=7, scale=2, fast=False,
                 color_mode="none", color_amount=.7, hatch_amount=.7,
-                include_color_endpoints=False, **settings):
-        if color_mode not in ("none", "ribbon", "layered"):
-            raise ValueError("color_mode must be 'none', 'ribbon' or 'layered'")
+                shadow_fill=1, include_color_endpoints=False, progress=None, **settings):
+        # progress(fraction, label) is called at stage boundaries and every
+        # few hundred keys so the studio can show what the machine is doing.
+        report = progress if callable(progress) else (lambda fraction, label: None)
+        if color_mode not in ("none", "ribbon", "layered", "vibrant"):
+            raise ValueError("color_mode must be 'none', 'ribbon', 'layered' or 'vibrant'")
         color_amount = float(color_amount)
         hatch_amount = float(hatch_amount)
         if not np.isfinite(color_amount) or not np.isfinite(hatch_amount):
             raise ValueError("Color and hatch amounts must be finite numbers")
         color_amount = float(np.clip(color_amount, 0, 1))
         hatch_amount = float(np.clip(hatch_amount, 0, 1))
+        shadow_fill = float(shadow_fill)
+        if not np.isfinite(shadow_fill):
+            raise ValueError("Shadow fill must be a finite number")
+        shadow_fill = float(np.clip(shadow_fill, 0, 1))
         if settings.get("inscription"):
             raise ValueError("Hidden lines are available with the original drawing style")
         source = ImageOps.exif_transpose(image)
@@ -78,8 +85,14 @@ class ContourEngine:
         height = max(24, round(width * source.height / source.width))
         if width * height > 5_000_000:
             raise ValueError("Reduce columns for this image aspect ratio")
+        report(.02, "Reading the photograph…")
         target = drawing_target(source, (width, height), simplify, contrast)
+        if color_mode == "vibrant":
+            from drawing.shadow_tone import preserve_shadows
+            target = preserve_shadows(source, (width, height), target, simplify, contrast,
+                                     amount=shadow_fill)
         target *= float(np.clip(pressure, .1, 1.2))
+        report(.05, "Tracing contours…")
         chars, glyphs = _atlas(charset)
         canvas = np.zeros((height + 24, width + 20), np.float32)
         padded_target = np.pad(target, ((12, 12), (10, 10)))
@@ -118,6 +131,9 @@ class ContourEngine:
         # Half-line feeds and fractional carriage offsets let keys join across
         # nominal cells. Every candidate is fitted against already printed ink.
         passes = 2 + 2 * int(np.clip(overstrike, 0, 2))
+        # Share of the progress bar given to key fitting; color mixing is
+        # roughly a third of the wall time when a color mode is selected.
+        fit_span = .80 if color_mode == "none" else .50
         # Flattened glyph bank so each candidate is scored with three small
         # matrix-vector products instead of three N×24×20 temporaries.
         glyph_rows = glyphs.reshape(len(chars), -1)
@@ -148,7 +164,12 @@ class ContourEngine:
             window = (integral[py + 24, px + 20] - integral[py, px + 20]
                       - integral[py + 24, px] + integral[py, px])
             keep = window / 480 >= .012 - 1e-6
-            for x, y in zip(px[keep].tolist(), py[keep].tolist()):
+            candidates = list(zip(px[keep].tolist(), py[keep].tolist()))
+            pass_label = f"Striking keys · pass {layer + 1} of {passes}"
+            report(.08 + fit_span * layer / passes, pass_label)
+            for count, (x, y) in enumerate(candidates):
+                if count and count % 500 == 0:
+                    report(.08 + fit_span * (layer + count / len(candidates)) / passes, pass_label)
                 patch = canvas[y:y + 24, x:x + 20]
                 desired = padded_target[y:y + 24, x:x + 20]
                 residual = desired - patch
@@ -186,14 +207,23 @@ class ContourEngine:
         color_meta = {"ribbons": [], "color_strikes": []}
         underlay = None
         hatch_underlay = None
+        color_start = .08 + fit_span
+        report(color_start, "Mixing color…" if color_mode != "none" else "Pressing the page…")
         if color_mode != "none":
-            if color_mode == "layered":
+            if color_mode == "vibrant":
+                from drawing.vibrant_color import vibrant_underlay as color_underlay
+            elif color_mode == "layered":
                 from drawing.layered_color import layered_underlay as color_underlay
             else:
                 from drawing.ribbon_color import color_underlay
+            color_span = .92 - color_start
+
+            def color_progress(fraction, label):
+                report(color_start + color_span * float(fraction), label)
+
             pixels, color_meta = color_underlay(source, width, height, paper_rgb,
-                chars, glyphs, amount=1, seed=seed,
-                **({"ink_rgb": ink_rgb, "hatch_amount": hatch_amount} if color_mode == "layered" else {}))
+                chars, glyphs, amount=1, seed=seed, progress=color_progress,
+                **({"ink_rgb": ink_rgb, "hatch_amount": hatch_amount} if color_mode in ("layered", "vibrant") else {}))
             # Keep a stable set of colored marks at every amount. The control
             # fades only their contribution, leaving black hatching unchanged.
             # A fixed pair of endpoints also lets the viewer render instantly.
@@ -211,6 +241,7 @@ class ContourEngine:
                 underlay = Image.fromarray(np.clip(pixels, 0, 255).astype(np.uint8)).resize(
                     mask.size, Image.Resampling.LANCZOS)
             del pixels
+        report(.92, "Pressing the page…")
         page = Image.new("RGB", (mask.width + 2 * margin, mask.height + 2 * margin), tuple(paper_rgb.astype(int)))
         endpoints = [page.copy(), page.copy()] if include_color_endpoints and color_mode != "none" else []
         for y in range(0, mask.height, 64):
@@ -240,4 +271,5 @@ class ContourEngine:
                       "overstrike": int(np.clip(overstrike, 0, 2)),
                       "text": "", "html": "", "strikes": strikes,
                       "color_mode": color_mode, "color_amount": color_amount,
+                      "shadow_fill": shadow_fill,
                       "hatch_amount": hatch_amount, "color_endpoints": endpoints, **color_meta}

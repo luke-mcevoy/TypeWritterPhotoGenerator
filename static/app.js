@@ -8,6 +8,12 @@
     let currentHtmlData = null;
     let currentTextData = null;
     let cropper = null;
+    let pendingCropFile = null;
+    let cropUrl = null;
+    let previewUrl = null;
+    let cropRevision = 0;
+    let cropFocus = null;
+    let savedCrop = null;
     let debounceTimer = null;
     let abort = null;
     let genSeq = 0;
@@ -29,6 +35,17 @@
     const sideGlyphPlaceholder = $("#side-glyph-placeholder");
     const liveStatus = $("#live-status");
     const liveText = $("#live-text");
+    const liveBar = $("#live-bar");
+    const liveBarFill = $("#live-bar-fill");
+    const livePct = $("#live-pct");
+    const postProgress = $("#post-progress");
+    const postProgressFill = $("#post-progress-fill");
+    const postProgressLabel = $("#post-progress-label");
+    const postProgressPct = $("#post-progress-pct");
+    const stageProgress = $("#stage-progress");
+    const stageProgressFill = $("#stage-progress-fill");
+    const stageProgressLabel = $("#stage-progress-label");
+    const stageProgressPct = $("#stage-progress-pct");
     const downloadSection = $("#download-section");
     const dimensionsInfo = $("#dimensions-info");
 
@@ -47,10 +64,12 @@
     const invertCheck = $("#invert-check");
     const drawingStyle = $("#drawing-style");
     const colorAmountSlider = $("#color-amount-slider");
+    const shadowFillSlider = $("#shadow-fill-slider");
 
     function syncDrawingStyle() {
         const original = drawingStyle.value === "original";
-        $("#color-controls").classList.toggle("hidden", !["refined", "ribbon"].includes(drawingStyle.value));
+        $("#color-controls").classList.toggle("hidden", !["vibrant", "refined", "ribbon"].includes(drawingStyle.value));
+        $$(".vibrant-only").forEach(el => el.classList.toggle("hidden", drawingStyle.value !== "vibrant"));
         $$(".original-only").forEach(el => el.classList.toggle("hidden", !original));
         $$(".contour-only").forEach(el => el.classList.toggle("hidden", original));
         $("#download-text-btn").classList.toggle("hidden", !original || !currentTextData);
@@ -65,10 +84,12 @@
         const [mono, full] = colorEndpoints;
         colorCanvas.width = mono.naturalWidth;
         colorCanvas.height = mono.naturalHeight;
-        context.drawImage(mono, 0, 0);
-        context.globalAlpha = Number(colorAmountSlider.value) / 100;
-        context.drawImage(full, 0, 0);
-        context.globalAlpha = 1;
+        const amount = Number(colorAmountSlider.value) / 100;
+        const blended = context.createImageData(colorCanvas.width, colorCanvas.height);
+        for (let i = 0; i < blended.data.length; i++) {
+            blended.data[i] = Math.round(mono.rgba[i]*(1-amount) + full.rgba[i]*amount);
+        }
+        context.putImageData(blended, 0, 0);
         currentImageData = colorCanvas.toDataURL("image/png");
         glyphImage.src = sideGlyph.src = currentImageData;
     }
@@ -162,23 +183,27 @@
     });
 
     function handleFile(file) {
-        originalFile = file;
-        currentImageData = null;
-        currentHtmlData = null;
-        currentTextData = null;
-        openWorkspace(file, URL.createObjectURL(file));
-        generate({ preview: true });
+        if (printing) return;
+        if (!file.type.startsWith("image/")) return toast("Choose an image file", "error");
+        showCropper(file);
     }
 
     function showCropper(file) {
+        if (printing) return;
+        closeCropper(false);
+        pendingCropFile = file;
+        cropFocus = document.activeElement;
+        const revision = cropRevision;
+        $("#apply-crop-btn").disabled = true;
+        $("#crop-ratio").value = "free";
+        $("#crop-size").textContent = "Loading photo…";
         cropSection.classList.remove("hidden");
-        if (cropper) {
-            cropper.destroy();
-            cropper = null;
-        }
-        const url = URL.createObjectURL(file);
-        cropImage.src = url;
         cropImage.onload = () => {
+            if (revision !== cropRevision) return;
+            if (!window.Cropper) {
+                $("#crop-size").textContent = "Crop controls could not load. You can still use the full image.";
+                return;
+            }
             cropper = new Cropper(cropImage, {
                 viewMode: 1,
                 autoCropArea: 1,
@@ -191,35 +216,96 @@
                 zoomable: true,
                 rotatable: false,
                 scalable: false,
+                ready() {
+                    if (revision !== cropRevision) return;
+                    if (file === originalFile && savedCrop) cropper.setData(savedCrop);
+                    $("#apply-crop-btn").disabled = false;
+                },
+                crop(event) {
+                    $("#crop-size").textContent = `${Math.round(event.detail.width)} × ${Math.round(event.detail.height)} pixels`;
+                },
             });
         };
+        cropImage.onerror = () => {
+            if (revision !== cropRevision) return;
+            closeCropper();
+            toast("This photo could not be opened. Try a JPEG, PNG or WebP image.", "error");
+        };
+        cropUrl = URL.createObjectURL(file);
+        cropImage.src = cropUrl;
+        $("#skip-crop-btn").focus();
+    }
+
+    function closeCropper(restoreFocus = true) {
+        ++cropRevision;
+        if (cropper) cropper.destroy();
+        cropper = null;
+        pendingCropFile = null;
+        cropImage.onload = cropImage.onerror = null;
+        cropSection.classList.add("hidden");
+        if (cropUrl) URL.revokeObjectURL(cropUrl);
+        cropUrl = null;
+        if (restoreFocus && cropFocus?.isConnected) cropFocus.focus();
+    }
+
+    function acceptPhoto(file, original, selection = null) {
+        ++genSeq;
+        clearTimeout(debounceTimer);
+        originalFile = original;
+        savedCrop = selection;
+        currentImageData = currentHtmlData = currentTextData = null;
+        colorEndpoints = null;
+        glyphImage.classList.add("hidden");
+        sideGlyph.classList.add("hidden");
+        openWorkspace(file, URL.createObjectURL(file));
+        generate({ preview: true });
     }
 
     $("#apply-crop-btn").addEventListener("click", () => {
         if (!cropper) return;
-        const canvas = cropper.getCroppedCanvas();
+        const revision = cropRevision;
+        const file = pendingCropFile;
+        const selection = cropper.getData(true);
+        const canvas = cropper.getCroppedCanvas({ maxWidth: 4096, maxHeight: 4096 });
+        if (!canvas || !canvas.width || !canvas.height) return toast("Select an area to crop", "error");
+        $("#apply-crop-btn").disabled = true;
         canvas.toBlob((blob) => {
-            const croppedFile = new File([blob], (originalFile || currentFile).name, { type: "image/png" });
-            openWorkspace(croppedFile, canvas.toDataURL("image/png"));
-            generate({ preview: true });
+            if (revision !== cropRevision) return;
+            if (!blob) {
+                $("#apply-crop-btn").disabled = false;
+                return toast("Could not crop this photo", "error");
+            }
+            const croppedFile = new File([blob], file.name.replace(/\.[^.]+$/, "") + "-crop.png", { type: "image/png" });
+            acceptPhoto(croppedFile, file, selection);
         }, "image/png");
     });
 
-    $("#skip-crop-btn").addEventListener("click", () => {
-        if (cropper) {
-            cropper.destroy();
-            cropper = null;
-        }
-        cropSection.classList.add("hidden");
+    $("#skip-crop-btn").addEventListener("click", () => closeCropper());
+    $("#use-full-image-btn").addEventListener("click", () => {
+        if (pendingCropFile) acceptPhoto(pendingCropFile, pendingCropFile);
+    });
+    $("#reset-crop-btn").addEventListener("click", () => {
+        $("#crop-ratio").value = "free";
+        cropper?.setAspectRatio(NaN);
+        cropper?.reset();
+    });
+    $("#crop-ratio").addEventListener("change", event => {
+        cropper?.setAspectRatio(event.target.value === "free" ? NaN : Number(event.target.value));
+    });
+    cropSection.addEventListener("keydown", event => {
+        if (event.key === "Escape") { event.preventDefault(); closeCropper(); }
+        if (event.key !== "Tab") return;
+        const controls = [...cropSection.querySelectorAll("button:not(:disabled), select")];
+        const first = controls[0], last = controls.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     });
 
-    function openWorkspace(file, previewUrl) {
+    function openWorkspace(file, nextUrl) {
         currentFile = file;
-        if (cropper) {
-            cropper.destroy();
-            cropper = null;
-        }
-        cropSection.classList.add("hidden");
+        closeCropper();
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        previewUrl = nextUrl;
         workspace.classList.add("has-file");
         document.body.classList.add("has-file");
         originalImage.src = previewUrl;
@@ -255,6 +341,13 @@
     bindSlider(pressureSlider, $("#pressure-value"), 2);
     bindSlider(wanderSlider, $("#wander-value"), 2);
     bindSlider(scaleSlider, $("#scale-value"), 0);
+    if (shadowFillSlider) {
+        const paintShadow = () => {
+            $("#shadow-fill-value").textContent = `${shadowFillSlider.value}%`;
+        };
+        shadowFillSlider.addEventListener("input", paintShadow);
+        paintShadow();
+    }
 
     const liveControls = [
         columnsSlider,
@@ -269,7 +362,8 @@
         inkSelect,
         invertCheck,
         drawingStyle,
-    ];
+        shadowFillSlider,
+    ].filter(Boolean);
     liveControls.forEach((el) => {
         el.addEventListener("input", () => scheduleGenerate(350));
         el.addEventListener("change", () => scheduleGenerate(250));
@@ -333,24 +427,169 @@
         debounceTimer = setTimeout(() => generate({ preview: true }), ms);
     }
 
-    function setLive(busy, label) {
-        liveStatus.classList.toggle("busy", busy);
+    const EXPECTED_MS = {
+        preview: { original: 2500, monochrome: 5000, ribbon: 6500, refined: 7000, vibrant: 8000 },
+        print: { original: 4000, monochrome: 7000, ribbon: 9000, refined: 8000, vibrant: 11000 },
+    };
+
+    let progressClock = null;
+    let progressState = null;
+
+    function expectedMs(kind) {
+        const style = drawingStyle ? drawingStyle.value : "vibrant";
+        const table = EXPECTED_MS[kind] || EXPECTED_MS.preview;
+        return table[style] || 8000;
+    }
+
+    function paintProgress(label, pct, { indeterminate = false } = {}) {
+        liveStatus.classList.add("busy");
         liveText.textContent = label;
+        const percent = Math.round(Math.max(0, Math.min(1, pct || 0)) * 100);
+        liveBar.hidden = false;
+        livePct.hidden = indeterminate;
+        liveBar.classList.toggle("indeterminate", indeterminate);
+        if (!indeterminate) {
+            liveBarFill.style.width = `${percent}%`;
+            livePct.textContent = `${percent}%`;
+        }
+        if (stageProgress) {
+            stageProgress.hidden = false;
+            stageProgress.classList.toggle("indeterminate", indeterminate);
+            stageProgressLabel.textContent = label;
+            stageProgressFill.style.width = indeterminate ? "35%" : `${percent}%`;
+            stageProgressPct.textContent = indeterminate ? "" : `${percent}%`;
+        }
+        if (postProgress && !postProgress.hidden) {
+            postProgress.classList.toggle("indeterminate", indeterminate);
+            postProgressLabel.textContent = label;
+            if (indeterminate) {
+                postProgressPct.textContent = "";
+            } else {
+                postProgressFill.style.width = `${percent}%`;
+                postProgressPct.textContent = `${percent}%`;
+            }
+        }
+    }
+
+    function setLive(busy, label, pct = null) {
+        if (!busy) {
+            stopProgressClock();
+            liveStatus.classList.remove("busy");
+            liveText.textContent = label;
+            liveBar.hidden = true;
+            livePct.hidden = true;
+            liveBar.classList.remove("indeterminate");
+            liveBarFill.style.width = "0%";
+            if (stageProgress) {
+                stageProgress.hidden = true;
+                stageProgress.classList.remove("indeterminate");
+            }
+            return;
+        }
+        if (progressState) progressState.label = label;
+        if (pct != null) {
+            if (progressState) {
+                progressState.serverPct = Math.max(progressState.serverPct || 0, pct);
+                progressState.indeterminate = false;
+                progressState.displayPct = Math.max(progressState.displayPct || 0, pct);
+            }
+            paintProgress(label, progressState ? progressState.displayPct : pct);
+        } else {
+            if (progressState) progressState.indeterminate = true;
+            paintProgress(label, progressState ? progressState.displayPct : 0, { indeterminate: true });
+        }
+    }
+
+    function startProgressClock(kind, label) {
+        stopProgressClock();
+        const started = performance.now();
+        const expected = expectedMs(kind);
+        progressState = { label, serverPct: 0, displayPct: 0, kind, indeterminate: false };
+        const tick = () => {
+            if (!progressState) return;
+            if (progressState.indeterminate) {
+                paintProgress(progressState.label, progressState.displayPct || 0, { indeterminate: true });
+                return;
+            }
+            const elapsed = performance.now() - started;
+            const clock = 0.92 * (1 - Math.exp(-elapsed / expected));
+            progressState.displayPct = Math.max(clock, progressState.serverPct || 0);
+            paintProgress(progressState.label, progressState.displayPct);
+        };
+        tick();
+        progressClock = setInterval(tick, 200);
+    }
+
+    function stopProgressClock() {
+        if (progressClock) clearInterval(progressClock);
+        progressClock = null;
+        progressState = null;
+    }
+
+    function showPostProgress(show) {
+        if (!postProgress) return;
+        postProgress.hidden = !show;
+        postProgress.classList.remove("indeterminate");
+        if (show) {
+            postProgressFill.style.width = "0%";
+            postProgressPct.textContent = "";
+            postProgressLabel.textContent = "Feeding the paper…";
+        }
     }
 
     function setPrinting(busy) {
         printing = busy;
-        $$(".rail input, .rail select, .preset, #file-input, #download-image-btn, #post-btn, #crop-btn, #change-image-btn, #apply-crop-btn")
+        $$(".rail input, .rail select, .preset, #file-input, #download-image-btn, #post-btn, #crop-btn, #change-image-btn, #apply-crop-btn, #cancel-post-btn")
             .forEach(el => { el.disabled = busy; });
     }
 
-    async function submitDrawing(url, options) {
-        for (let attempt = 0; ; attempt++) {
-            const response = await fetch(url, options);
-            if (response.status !== 503 || !response.headers.has("Retry-After") || attempt >= 30) return response;
-            await response.text();
-            setLive(true, "Waiting for the typewriter…");
-            await new Promise(resolve => setTimeout(resolve, 2000));
+    function newJob() {
+        if (window.crypto && crypto.randomUUID) return crypto.randomUUID().replace(/-/g, "");
+        return Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+    }
+
+    // The server reports how far along the current render is; poll it while a
+    // /convert or /api/posts request is in flight so the studio can show the
+    // stage ("Striking keys · pass 2 of 4") and a percentage, and, when the
+    // machine is busy with someone else's page, how far along that one is.
+    function watchProgress(job, fallbackLabel) {
+        let stopped = false;
+        const tick = async () => {
+            if (stopped) return;
+            try {
+                const resp = await fetch(`/progress/${job}`, { cache: "no-store" });
+                if (!resp.ok || stopped) return;
+                const info = await resp.json();
+                if (stopped) return;
+                if (info.stage === "rendering" && info.pct != null) {
+                    setLive(true, info.label || fallbackLabel, info.pct);
+                } else if (info.busy) {
+                    const percent = Math.round((info.busy.pct || 0) * 100);
+                    setLive(true, `Another page is printing · ${percent}%`, info.busy.pct);
+                } else if (info.stage === "waiting") {
+                    setLive(true, "Waiting for the typewriter…", null);
+                }
+            } catch (_err) {
+                // Progress is cosmetic; the main request reports real errors.
+            }
+        };
+        const timer = setInterval(tick, 250);
+        tick();
+        return { stop() { stopped = true; clearInterval(timer); } };
+    }
+
+    async function submitDrawing(url, options, job = null, fallbackLabel = "Typing…") {
+        const watcher = job ? watchProgress(job, fallbackLabel) : null;
+        try {
+            for (let attempt = 0; ; attempt++) {
+                const response = await fetch(url, options);
+                if (response.status !== 503 || !response.headers.has("Retry-After") || attempt >= 30) return response;
+                await response.text();
+                setLive(true, "Waiting for the typewriter…");
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+        } finally {
+            watcher?.stop();
         }
     }
 
@@ -394,19 +633,23 @@
         const seq = ++genSeq;
         colorEndpoints = null;
         const signal = abort.signal;
-        setLive(true, preview ? "Typing…" : "Printing…");
+        const label = preview ? "Typing…" : "Printing…";
+        startProgressClock(preview ? "preview" : "print", label);
+        setLive(true, label, 0);
 
+        const job = newJob();
         const formData = new FormData();
         appendImage(formData, currentFile);
         appendSettings(formData, scale);
         formData.append("preview", preview ? "1" : "0");
+        formData.append("job", job);
 
         try {
             const resp = await submitDrawing("/convert", {
                 method: "POST",
                 body: formData,
                 signal,
-            });
+            }, job, label);
             const data = await resp.json();
             if (seq !== genSeq) return null;
             if (!resp.ok) {
@@ -420,6 +663,12 @@
                     const picture = new Image();
                     picture.src = url;
                     await picture.decode();
+                    const canvas = document.createElement("canvas");
+                    canvas.width = picture.naturalWidth;
+                    canvas.height = picture.naturalHeight;
+                    const context = canvas.getContext("2d");
+                    context.drawImage(picture, 0, 0);
+                    picture.rgba = context.getImageData(0, 0, canvas.width, canvas.height).data;
                     return picture;
                 }));
                 if (seq !== genSeq) return null;
@@ -511,17 +760,22 @@
         }
         setPrinting(true);
         const scale = parseInt(scaleSlider.value, 10);
-        setLive(true, "Printing…");
+        let posted = false;
+        showPostProgress(true);
+        startProgressClock("print", "Printing…");
+        setLive(true, "Printing…", 0);
         try {
+            const job = newJob();
             const formData = new FormData();
             appendImage(formData, currentFile);
             formData.append("caption", postCaption.value.trim());
             appendSettings(formData, scale);
+            formData.append("job", job);
             const resp = await submitDrawing("/api/posts", {
                 method: "POST",
                 headers: { "X-Requested-With": "fetch" },
                 body: formData,
-            });
+            }, job, "Printing…");
             const raw = await resp.text();
             let data = {};
             try {
@@ -540,7 +794,8 @@
                 toast(data.error || "Could not post", "error");
                 return;
             }
-            postModal.classList.add("hidden");
+            posted = true;
+            setLive(true, "On the wall", 1);
             postCaption.value = "";
             toast("On the wall");
             setTimeout(() => {
@@ -550,9 +805,12 @@
             confirmBtn.disabled = false;
             toast("Could not post: " + err.message, "error");
         } finally {
-            confirmBtn.disabled = false;
-            setPrinting(false);
-            setLive(false, "Live");
+            if (!posted) {
+                confirmBtn.disabled = false;
+                setPrinting(false);
+                setLive(false, "Live");
+                showPostProgress(false);
+            }
         }
     });
 
@@ -573,6 +831,7 @@
         const values = {
             drawing_style: drawingStyle.value,
             color_amount: Number(colorAmountSlider.value) / 100,
+            shadow_fill: shadowFillSlider ? Number(shadowFillSlider.value) / 100 : 1,
             columns: columnsSlider.value, charset: charsetSelect.value,
             paper: paperSelect.value, ink: inkSelect.value,
             contrast: contrastSlider.value, detail: detailSlider.value,

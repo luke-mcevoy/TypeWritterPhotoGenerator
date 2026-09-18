@@ -51,7 +51,7 @@ class StudioTests(unittest.TestCase):
     def request(self, endpoint="/convert", **settings):
         return self.client.post(endpoint, data={
             "image": (io.BytesIO(self.photo), "photo.png"), "columns": "40",
-            "drawing_style": "refined", "preview": "1", **settings,
+            "drawing_style": "vibrant", "preview": "1", **settings,
         })
 
     def decode(self, url):
@@ -71,7 +71,7 @@ class StudioTests(unittest.TestCase):
             self.assertEqual(self.decode(result.json["image_data"]).tobytes(), endpoint.tobytes())
 
     def test_all_styles_export_their_supported_formats(self):
-        for style in ("original", "monochrome", "ribbon", "refined"):
+        for style in ("original", "monochrome", "ribbon", "refined", "vibrant"):
             result = self.request(drawing_style=style, preview="0", color_amount=".37")
             self.assertEqual(result.status_code, 200, result.json)
             self.assertEqual(result.json["drawing_style"], style)
@@ -101,6 +101,8 @@ class StudioTests(unittest.TestCase):
         for value, expected in (("-2", 0), ("4", 1)):
             response = self.request(color_amount=value)
             self.assertEqual(response.json["color_amount"], expected)
+        self.assertEqual(self.request(shadow_fill="nan").status_code, 400)
+        self.assertAlmostEqual(self.request(shadow_fill="0.4").json["shadow_fill"], 0.4)
         photo = Image.new("RGB", (1, 1000), "white")
         buffer = io.BytesIO()
         photo.save(buffer, "PNG")
@@ -117,6 +119,33 @@ class StudioTests(unittest.TestCase):
         self.assertEqual(self.request().status_code, 200)
         self.assertEqual(self.request(color_amount="bad").status_code, 400)
         self.assertEqual(self.request().status_code, 200)
+
+    def test_progress_endpoint_tracks_a_named_job(self):
+        job = "progressjob1"
+        self.server.progress_update(job, 0.42, "Striking keys · pass 2 of 4")
+        response = self.client.get(f"/progress/{job}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["stage"], "rendering")
+        self.assertAlmostEqual(response.json["pct"], 0.42)
+        self.assertIn("Striking keys", response.json["label"])
+        self.assertEqual(self.client.get("/progress/bad").status_code, 400)
+
+    def test_convert_marks_a_job_done_and_reports_passes(self):
+        calls = []
+        image = Image.open(io.BytesIO(self.photo))
+        self.server.contour_engine.convert(
+            image, columns=40, color_mode="none",
+            progress=lambda fraction, label: calls.append((fraction, label)),
+        )
+        labels = [label for _fraction, label in calls]
+        self.assertTrue(any("Striking keys" in label for label in labels), labels)
+        self.assertEqual([fraction for fraction, _label in calls],
+                         sorted(fraction for fraction, _label in calls))
+        response = self.request(job="convertjob1", columns="40", drawing_style="monochrome")
+        self.assertEqual(response.status_code, 200, response.json)
+        snapshot = self.client.get("/progress/convertjob1").json
+        self.assertEqual(snapshot["stage"], "done")
+        self.assertGreaterEqual(snapshot["pct"], 0.99)
 
     def test_existing_clients_default_to_original_and_posts_require_login(self):
         response = self.client.post("/convert", data={"columns": "40",
