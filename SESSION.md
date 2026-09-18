@@ -224,3 +224,21 @@
   server remains on 8008. Preview/crop changes are being synced to GitHub; neither
   was deployed in this session. Next iteration should address intentional object
   construction and visual hierarchy, not just increase character diversity.
+
+## 2026-09-18 — production deployment
+
+- User explicitly requested updating production with the revised preview.
+  Deployed tested code commit `f847c2d` with `fly deploy --app carriage-typewriter
+  --remote-only`. Fly release 18 uses image
+  `deployment-01M2TRZASGDPE3DA72NDH2PRM5` (digest
+  `sha256:7a875140c5d6ce6db90f810d24fe27c567404e02023ebd68d60c8ef9997593f4`).
+- Machine `840e95a2d5ee28` started successfully and its HTTP health check passes.
+  Public `/health` returned `{"ok":true}`. The production browser check verified
+  the new renderer, instant color interpolation, side-by-side view and PNG export.
+  All six styles, retained color, mobile width and browser-error checks passed.
+- Upload cropping is included in this deployment. The revised renderer is
+  available as `Typed illustration (preview)` after framing an uploaded photo;
+  Vibrant remains the default. No existing public posts were regenerated and
+  the browser check skips account creation/posting on production.
+- Updated README and the study document to reflect the live deployment. The
+  artistic limitations remain those documented in the previous handoff.

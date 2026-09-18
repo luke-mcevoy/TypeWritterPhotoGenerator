@@ -20,6 +20,8 @@ reference artwork are painted onto the output.
 ## Inspect the result
 
 - Local gallery: http://127.0.0.1:8008/illustrated/
+- Production Studio: https://carriage-typewriter.fly.dev/studio → upload/frame
+  a photo → **Typed illustration (preview)**. Deployed 18 September 2026.
 - Local Studio: http://127.0.0.1:5012/studio → **Typed illustration (preview)**.
 - The gallery compares source/current Vibrant/revised drawing on the crow,
   sunlit forest, brick facade, colored houses, San Francisco and night city.
@@ -46,8 +48,8 @@ keys alone cannot produce that judgment. The reference is
 [Crossing Paths, Manhattan](https://www.jamescookartworkshop.com/products/crossing-paths-manhattan)
 and [Evening in Tokyo](https://www.jamescookartworkshop.com/products/evening-in-tokyo).
 
-The preview remains optional and local; the default and production posts have
-not changed. Reproduce with `python -m experiments.illustration_study --columns
+The preview is now deployed as an optional style; the default and existing
+production posts have not changed. Reproduce with `python -m experiments.illustration_study --columns
 180 PHOTO...`. Photo credits for the existing nature/building inputs are in
 `experiments/scene_validation.json`; the crow and SF sources are the user's
 public posts 31 and 33. Reference artwork is not included in the repository.
