@@ -242,3 +242,22 @@
   the browser check skips account creation/posting on production.
 - Updated README and the study document to reflect the live deployment. The
   artistic limitations remain those documented in the previous handoff.
+
+## 2026-09-20 — visual GitHub README
+
+- Rebuilt the README around a source/drawing hero, an animated 0–100% color
+  example, a glyph close-up, actual Studio/crop screenshots, and two clickable
+  wall examples. Seven optimized assets total 3.52 MiB in `docs/media/`.
+- Assets prepared September 18 use actual, validated Vibrant renderer output
+  and saved public posts; photo credits and exact settings are documented in
+  `docs/media/README.md`. Screenshots came from the disposable local Studio.
+  No renderer or production posts were changed.
+- Clarified account-free rendering/downloads, six available styles, crop flow,
+  Dark fill, local setup, and SQLite/Tigris storage. The illustration preview
+  remains accurately labeled as experimental. Developer details are expandable.
+- Verified all 20 local links, seven decodable images with alt text, the animated
+  GIF's 15 frames, and six live demo URLs (HTTP 200). Rendered Markdown through
+  GitHub's API and checked a local desktop/mobile browser preview, with no page
+  overflow. Studio captures completed without JavaScript errors; diff check passes.
+- Publishing this documentation-only update to `main` with `[skip ci]` to avoid
+  an unnecessary Fly deployment. Existing production code remains unchanged.

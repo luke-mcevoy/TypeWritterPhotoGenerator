@@ -1,93 +1,156 @@
+<div align="center">
+
 # Carriage
 
-Photographs, redrawn in type. A vintage machine chooses the keys for tone and line. From across the room it is a drawing. Up close it is letters.
+### Photographs, redrawn in type.
 
-Join, type a photograph in the studio, and post it to a shared wall. Open any page to see the original beside the drawing.
+From across the room, a drawing. Up close, letters, punctuation, and layers of colored ink.
 
-## Demos
+**[Open the Studio](https://carriage-typewriter.fly.dev/studio)** · **[Explore the wall](https://carriage-typewriter.fly.dev/)** · **[Run locally](#run-locally)**
 
-Live app: **[https://carriage-typewriter.fly.dev](https://carriage-typewriter.fly.dev)**
+*Try it and download a drawing without an account.*
 
-| Try this | Link |
+[![A red-brick building photograph beside its Carriage rendering, constructed from black and colored typewriter characters. Vibrant color, 180 columns, 70% color.](docs/media/photo-to-type.jpg)](https://carriage-typewriter.fly.dev/studio)
+
+</div>
+
+Carriage turns your photographs into typewriter drawings using actual font glyphs: letters follow edges, overlapping impressions build shadows, and colored ribbons bring the scene back to life. A Python renderer does the drawing; the browser is your studio.
+
+## Make a page of your own
+
+1. **Drop a photograph** into the [Studio](https://carriage-typewriter.fly.dev/studio). Frame it with the crop tool, or keep the full image.
+2. **Find your drawing.** Adjust color, detail, contrast, paper, and ribbon. Switch between **Photo**, **Drawing**, and **Both** as you work.
+3. **Save the image.** Sign in if you want to post it to the shared wall, with the original alongside it.
+
+[![The Carriage Studio showing the original photograph and typed drawing side by side, with drawing-style, color, detail, and contrast controls.](docs/media/studio.jpg)](https://carriage-typewriter.fly.dev/studio)
+
+## A little color. Or a lot.
+
+Move **Color amount** from **0% to 100%**. The black drawing stays fixed while the colored impressions fade in. The slider updates immediately, so you can find the balance without waiting for another render.
+
+<p align="center">
+  <a href="https://carriage-typewriter.fly.dev/studio"><img src="docs/media/color-amount.gif" width="640" alt="Animated forest drawing: color amount rises from 0% to 100%, bringing green foliage and golden trunks into the same black drawing, then fades back."></a>
+</p>
+
+*Actual Vibrant color output at 180 columns. The animation blends the same lossless color endpoints used by the Studio.*
+
+## Every mark is a key
+
+Edges, texture, and shade are built from whole character impressions. Zoom into the brickwork from the opening example:
+
+[![Magnified detail of the typed brickwork: individual letters, slashes, brackets, and overlapping black, red, and blue impressions are visible.](docs/media/glyph-detail.jpg)](docs/media/glyph-detail.jpg)
+
+The renderer follows contours, lays down tonal marks, and adds colored glyphs in separate passes. It runs with **Pillow and NumPy**, without a model download or an external image-generation API.
+
+## From the wall
+
+Open a page to compare its saved **Drawing**, **Photo**, and **Both** views. Click the drawing to inspect it at print size.
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <a href="https://carriage-typewriter.fly.dev/p/43"><img src="docs/media/wall-lucid.jpg" width="420" alt="Lucid: a person in a yellow shirt beside a white car, drawn in type against a warm brick interior."></a><br>
+      <strong><a href="https://carriage-typewriter.fly.dev/p/43">Lucid ↗</a></strong>
+    </td>
+    <td align="center" width="50%">
+      <a href="https://carriage-typewriter.fly.dev/p/33"><img src="docs/media/wall-sf.jpg" width="420" alt="SF: a steep San Francisco street and distant water under a softly colored sky, rendered in typewriter characters."></a><br>
+      <strong><a href="https://carriage-typewriter.fly.dev/p/33">SF ↗</a></strong>
+    </td>
+  </tr>
+</table>
+
+**More pages:** [Crow](https://carriage-typewriter.fly.dev/p/31) · [Harvard](https://carriage-typewriter.fly.dev/p/19) · [Fish](https://carriage-typewriter.fly.dev/p/7) · [Browse everything](https://carriage-typewriter.fly.dev/)
+
+*Wall pages are saved snapshots. Updating the renderer does not change existing posts.*
+
+## Your photo, your framing
+
+Crop before the first render. Choose free crop, square, 4:3, 3:4, or 16:9; drag the selection; reset; or use the whole photograph. **Crop** reopens the original so you can reframe later. The preview, download, and posted source all use the same selection.
+
+<p align="center">
+  <img src="docs/media/crop.jpg" width="800" alt="The Studio's Frame your photo dialog with a square crop selected over the brick building, crop handles, aspect-ratio menu, and Apply crop button.">
+</p>
+
+## Pick your type
+
+| Drawing style | What it does |
 | --- | --- |
-| Shared wall | [carriage-typewriter.fly.dev](https://carriage-typewriter.fly.dev) |
-| Studio | [Open the studio](https://carriage-typewriter.fly.dev/studio) |
-| Fish | [Photo / Drawing / Both](https://carriage-typewriter.fly.dev/p/7) |
-| Turkey | [Photo / Drawing / Both](https://carriage-typewriter.fly.dev/p/6) |
-| Desert | [Photo / Drawing / Both](https://carriage-typewriter.fly.dev/p/8) |
-| Stevens | [Photo / Drawing / Both](https://carriage-typewriter.fly.dev/p/9) |
-| Car | [Photo / Drawing / Both](https://carriage-typewriter.fly.dev/p/10) |
+| **Vibrant color** · default | Layers a wider ribbon palette over the black drawing for stronger color coverage. |
+| **Typed illustration** · preview | Fits characters to local shapes and discourages repeated keys in nearby marks. |
+| **Refined color** | An earlier layered-color renderer, retained for comparison. |
+| **Earlier color** | The first ribbon-color approach. |
+| **New monochrome** | Contour and tonal drawing without colored impressions. |
+| **Original algorithm** | The original grid-based renderer, including text and HTML exports. |
 
-On a drawing page, use **Drawing**, **Photo**, and **Both** to compare the typed page with the original.
+**Columns**, **Simplify**, and **Contrast** shape the drawing. Under **More**, change the keys, paper, ribbon, pressure, and overstrike. **Dark fill** controls shadow coverage in Vibrant color and Typed illustration, independently of color amount. **Save** exports a PNG for the newer styles; the original style exports a JPEG.
 
-To make your own: **Join** → **Studio** → drop a photo → frame it → **Post**.
-
-Uploads open **Frame your photo** before rendering. Drag to crop, choose a shape
-(free, square, landscape, portrait or wide), reset the selection, or choose
-**Use full image**. The **Crop** button reopens the original photo for reframing.
-The same crop is used for previews, downloads and the posted source photograph.
-
-The Studio starts with **Vibrant color**. **Color amount** fades the colored
-character impressions from 0–100% while keeping the black drawing fixed.
-This mode preserves yellow-green foliage, uses a wider ribbon palette for
-different objects, and layers more colored impressions for stronger coverage.
-The earlier **Refined color**, **Earlier color**, **New monochrome**, and
-**Original algorithm** styles remain available. Save exports a PNG for the
-new styles; posts use the same color setting. Existing posts are saved images
-and do not change when the renderer is updated.
-
-This checkout also includes **Typed illustration (preview)**. It fits the full
-keyboard to local shapes, discourages a single character from dominating a
-patch, and matches curves as well as straight contour strokes. It remains an
-opt-in study; Vibrant is still the default. The [comparison and limitations](docs/typed-illustration.md)
-include six photographs and a close-up. The crop workflow and illustration
-preview are deployed to Fly. Upload a photo in the Studio, then choose
-**Typed illustration (preview)** in the drawing-style menu to try the new renderer.
-
-**More → Shadow fill** controls the extra character coverage inside dark subjects
-in Vibrant color. It prevents hollow silhouettes but can also make dark
-backgrounds dense. Color amount and Shadow fill address different parts of the
-drawing. See the [algorithm review](docs/algorithm-review-2026-09-18.md) for the
-current limitations and the proposed direction toward more deliberate typed art.
-
-To compare the color algorithms locally:
-
-```sh
-.venv/bin/python -m experiments.vibrant_study your-photo.jpg
-.venv/bin/python -m experiments.illustration_study --columns 180 your-photo.jpg
-.venv/bin/python -m unittest discover -s tests -v
-.venv/bin/python -m unittest discover -s experiments -p 'test_*.py'
-```
-
-The comparison is written to `output/algorithm-comparison/vibrant/index.html`.
-
-Fly’s free trial stops the machine every five minutes until a payment method is on the account. After that, the first visit following a quiet stretch may take a few seconds to wake.
+Typed illustration is an opt-in experiment. It adds character variety, but dense textures and subtle colors still need work. See the [six-photo study](docs/typed-illustration.md) and [algorithm review](docs/algorithm-review-2026-09-18.md) for comparisons and current limitations.
 
 ## Run locally
 
+Use **Python 3.12+**. No cloud account or API key is needed for local rendering.
+
 ```bash
+git clone https://github.com/luke-mcevoy/TypeWritterPhotoGenerator.git
+cd TypeWritterPhotoGenerator
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python app.py
 ```
 
-Open [http://127.0.0.1:5001](http://127.0.0.1:5001). Drawings and accounts live in `data/` (gitignored).
+Open **[localhost:5001](http://127.0.0.1:5001)**. Local accounts, drawings, and uploaded photographs are stored in the gitignored `data/` directory. Set `PORT` to use a different port, or `FLASK_DEBUG=1` for development mode.
 
-## Share from this Mac
+<details>
+<summary><strong>Renderer studies and tests</strong></summary>
 
-Quick Cloudflare tunnels only work while this process is running. Plug the laptop in, leave the lid open, and in Terminal:
+Compare the color renderers or the illustration preview on your own photographs:
 
 ```bash
-./serve-public.sh
+python -m experiments.vibrant_study your-photo.jpg
+python -m experiments.illustration_study --columns 180 your-photo.jpg
 ```
 
-Copy the `https://….trycloudflare.com` URL it prints. Closing the window, sleeping the Mac, or Ctrl+C kills that link. Posts made through the tunnel are stored in this machine’s `data/` folder, not on Fly.
+The studies write browsable galleries to `output/algorithm-comparison/vibrant/` and `output/algorithm-comparison/illustrated/`, including source photographs, rendered pages, and color controls.
 
-## Deploy
+```bash
+python -m unittest discover -s tests -v
+python -m unittest discover -s experiments -p 'test_*.py'
+```
+
+Start with [`drawing/contour_engine.py`](drawing/contour_engine.py) for the rendering pipeline, [`drawing/illustration.py`](drawing/illustration.py) for the preview, [`app.py`](app.py) for the Flask app, and [`static/app.js`](static/app.js) for the Studio.
+
+</details>
+
+<details>
+<summary><strong>Storage and deployment</strong></summary>
+
+The app uses Flask, SQLite, and a vanilla JavaScript frontend. Gunicorn serves the production container on Fly.io.
+
+| Setting | Purpose |
+| --- | --- |
+| `SECRET_KEY` | Flask session-signing key. Locally, a persistent key is created in `data/` if unset. |
+| `CARRIAGE_INVITE` | Optional invite code for account creation. |
+| `BUCKET_NAME` | Enable object storage for photographs and drawings; otherwise use local `data/posts/`. |
+| `AWS_ENDPOINT_URL_S3`, `AWS_REGION` | Configure the S3-compatible store; defaults target Tigris. Use standard AWS credentials. |
+| `MEDIA_PUBLIC_URL` | Optional public media base URL. |
+
+The production app keeps SQLite on the Fly volume mounted at `/app/data` and images in Tigris object storage. See [`fly.toml`](fly.toml), [`Dockerfile`](Dockerfile), and [`storage.py`](storage.py) for configuration. To self-host, use your own Fly app, volume, and storage credentials.
+
+For maintainers deploying the existing app:
 
 ```bash
 fly deploy --app carriage-typewriter
 ```
 
-SQLite and uploaded pages sit on the Fly volume mounted at `/app/data`.
+The [GitHub Actions workflow](.github/workflows/fly-deploy.yml) also deploys pushes to `main` and `master` when `FLY_API_TOKEN` is configured. The app can sleep when idle, so a first visit may take a few seconds to wake it.
+
+To temporarily share a local instance instead, run [`./serve-public.sh`](serve-public.sh). Its Cloudflare URL lasts only while the process and this machine remain running; posts stay in the local `data/` directory.
+
+</details>
+
+---
+
+Inspired by the craft of typewriter drawing, including [James Cook's work](https://www.jamescookartworkshop.com/collections/shop). Carriage is an independent software experiment.
+
+[Image credits and demo settings](docs/media/README.md) · [Special Elite font license](fonts/LICENSE.txt)
