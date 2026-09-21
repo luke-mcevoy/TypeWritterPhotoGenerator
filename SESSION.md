@@ -291,3 +291,10 @@
 - README documents settings and the distinction between key count and pixel
   resolution. GitHub Actions' last two deployments failed independently of this
   work; using a manually verified Fly deployment and `[skip ci]` for this release.
+- Deployed code commit `f78427b` as Fly machine version 19, image
+  `deployment-01M30RX7YPTQ8716GSY4NBJNZ1`, digest
+  `sha256:20ee612e5f6fc8eaf0a39df875004bf6ece6f7009971ff515f41732259ae1690`.
+  Machine `840e95a2d5ee28` is started with its health check passing; public
+  `/health` returns `{"ok":true}`. The wallpaper browser suite also passed
+  against production, including a real 2160×4680 PNG download at 37% color.
+  It created no accounts or posts. Disposable Docker test containers stopped.
