@@ -261,3 +261,33 @@
   overflow. Studio captures completed without JavaScript errors; diff check passes.
 - Publishing this documentation-only update to `main` with `[skip ci]` to avoid
   an unnecessary Fly deployment. Existing production code remains unchanged.
+
+## 2026-09-20 — optional high-resolution and phone wallpaper exports
+
+- User requested the README before/after plus the highest-resolution output as
+  an opt-in setting suitable for phone wallpapers. README comparison is at
+  `output/readme-review/before-after.jpg` and its scrollable HTML companion.
+- Added More → Save as: Standard remains the default, Maximum PNG preserves
+  proportions within 6,000 px / 12 MP, and phone presets are 2160×4680 (9:19.5)
+  and 2160×3840 (9:16). No particular phone model was supplied. Phone framing
+  offers the full drawing on matching paper or centered fill/crop, with a live
+  thumbnail. Export choices do not trigger previews or affect wall posts.
+- `drawing/export.py` re-rasterizes the existing glyph plan from the font at
+  output size, with horizontal strips bounding working memory. Preserves selected
+  paper, ink, black hatching, and color amount. `/export` returns a binary PNG
+  with a dimensions-based filename. The original grid renderer retains its
+  existing options; high-resolution export is available for the five newer styles.
+- The six new export checks and existing app tests pass (32 total), plus all
+  23 experiment tests. Native-size replay matches existing rendering within
+  one channel value; color endpoints retain exact float32 interpolation.
+- Docker validation on Python 3.12, capped at one CPU / 2 GB: forest maximum
+  4173×2874, brick phone 2160×3840, crow phone 2160×4680, and a tall forest crop
+  2160×4680 all exported successfully. Times 2.88–10.23 s; cumulative peak RSS
+  590.6 MiB. PNGs and benchmark JSON are in `output/wallpaper-study/`.
+- Browser checks passed real phone download, retained color, fit/fill preview,
+  both ratios, reset-to-standard, original-style compatibility, and mobile width.
+  Existing Studio suite also passed all six modes, instant color, regular PNG
+  downloads, and signed-in posting against the disposable local container.
+- README documents settings and the distinction between key count and pixel
+  resolution. GitHub Actions' last two deployments failed independently of this
+  work; using a manually verified Fly deployment and `[skip ci]` for this release.

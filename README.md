@@ -71,6 +71,21 @@ Crop before the first render. Choose free crop, square, 4:3, 3:4, or 16:9; drag 
   <img src="docs/media/crop.jpg" width="800" alt="The Studio's Frame your photo dialog with a square crop selected over the brick building, crop handles, aspect-ratio menu, and Apply crop button.">
 </p>
 
+## Print bigger. Make a phone wallpaper.
+
+High-resolution exports are **opt-in**. In the Studio, open **More → Save as**, choose a format, then press **Save**:
+
+| Export | Output |
+| --- | --- |
+| **Standard drawing** · default | The usual download, using the Print setting. |
+| **Maximum resolution PNG** | Original proportions, up to 6,000 pixels on the long edge and 12 megapixels. |
+| **Phone · 2160 × 4680** | A tall 9:19.5 wallpaper. |
+| **Phone · 2160 × 3840** | A 9:16 wallpaper. |
+
+Phone exports include a framing preview. **Keep whole drawing** adds matching paper around the artwork; **Fill screen** crops the edges to fill the phone shape. Use **Crop** to move the subject within the composition.
+
+The high-resolution printer draws each character again from the font at the final size and saves a lossless PNG. **Columns** controls the number of keys in the drawing; **Save as** controls their output resolution. These exports are available for the five newer drawing styles. The original algorithm keeps its existing export options.
+
 ## Pick your type
 
 | Drawing style | What it does |

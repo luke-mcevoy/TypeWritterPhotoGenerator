@@ -302,6 +302,7 @@ class ContourEngine:
             color_meta["ribbons"] = []
             color_meta["color_strikes"] = []
         return page, {"algorithm": "contour", "strike_count": len(strikes),
+                      "plan_size": (width, height),
                       "chars_wide": columns, "chars_tall": round(height / 16),
                       "overstrike": int(np.clip(overstrike, 0, 2)),
                       "text": "", "html": "", "strikes": strikes,

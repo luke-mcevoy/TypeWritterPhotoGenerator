@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Carriage</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=crop2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=wallpaper1">
 </head>
 <body>
     <div class="shell">
@@ -83,6 +83,38 @@
                     <summary>More</summary>
 
                     <div class="control-group">
+                        <label for="export-profile"><span class="label-text">Save as</span></label>
+                        <div class="select-wrapper">
+                            <select id="export-profile" aria-describedby="export-hint">
+                                <option value="standard" selected>Standard drawing</option>
+                                <option value="maximum">Maximum resolution PNG</option>
+                                <option value="phone_tall">Phone · 2160 × 4680</option>
+                                <option value="phone_classic">Phone · 2160 × 3840</option>
+                            </select>
+                        </div>
+                        <p class="control-hint" id="export-hint" aria-live="polite">Save uses the Print setting below.</p>
+                    </div>
+                    <div class="control-group hidden" id="wallpaper-controls">
+                        <label for="wallpaper-fit"><span class="label-text">Phone framing</span></label>
+                        <div class="select-wrapper">
+                            <select id="wallpaper-fit">
+                                <option value="contain">Keep whole drawing</option>
+                                <option value="cover">Fill screen · crop edges</option>
+                            </select>
+                        </div>
+                        <p class="control-hint">Matching paper fills any space. To reframe the subject, use Crop.</p>
+                        <canvas id="wallpaper-preview" width="216" height="468" role="img" aria-label="Phone wallpaper framing preview"></canvas>
+                        <p class="control-hint">Framing preview · high resolution is rendered when you Save.</p>
+                    </div>
+                    <div class="control-group contour-only" id="print-scale-control">
+                        <label>
+                            <span class="label-text">Print</span>
+                            <span class="label-value" id="scale-value">2</span>
+                        </label>
+                        <input type="range" id="scale-slider" min="1" max="3" value="2" step="1">
+                    </div>
+
+                    <div class="control-group">
                         <label><span class="label-text">Keys</span></label>
                         <div class="select-wrapper">
                             <select id="charset-select">
@@ -151,13 +183,6 @@
                             <span class="label-value" id="wander-value">0.70</span>
                         </label>
                         <input type="range" id="wander-slider" min="0" max="1.4" value="0.7" step="0.05">
-                    </div>
-                    <div class="control-group contour-only">
-                        <label>
-                            <span class="label-text">Print</span>
-                            <span class="label-value" id="scale-value">2</span>
-                        </label>
-                        <input type="range" id="scale-slider" min="1" max="3" value="2" step="1">
                     </div>
                     <div class="control-group original-only hidden">
                         <label><span class="label-text">Hidden line</span></label>
@@ -276,6 +301,6 @@
         };
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
-    <script src="{{ url_for('static', filename='app.js') }}?v=illustrated1"></script>
+    <script src="{{ url_for('static', filename='app.js') }}?v=wallpaper1"></script>
 </body>
 </html>

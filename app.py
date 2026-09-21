@@ -17,6 +17,7 @@ from flask import (
     render_template,
     request,
     send_from_directory,
+    send_file,
     session,
     url_for,
 )
@@ -27,6 +28,8 @@ import db
 import storage
 from typewriter_engine import TypewriterEngine
 from drawing.contour_engine import ContourEngine
+from drawing.export import EXPORT_PROFILES, print_plan
+from typewriter_engine import PAPERS, INKS
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024
@@ -253,7 +256,8 @@ def settings_from_request() -> dict:
     }
 
 
-def render_drawing(image: Image.Image, preview: bool = False, post: bool = False) -> tuple[Image.Image, dict]:
+def render_drawing(image: Image.Image, preview: bool = False, post: bool = False,
+                   export_profile: str | None = None, wallpaper_fit: str = "contain") -> tuple[Image.Image, dict]:
     global _active_job
     job = request_job()
     # Keep health checks responsive while bounding concurrent render memory.
@@ -263,7 +267,8 @@ def render_drawing(image: Image.Image, preview: bool = False, post: bool = False
     _active_job = job
     progress_update(job, 0.01, "Feeding the paper…")
     try:
-        return _render_drawing(image, preview, post, job=job)
+        return _render_drawing(image, preview, post, job=job,
+                               export_profile=export_profile, wallpaper_fit=wallpaper_fit)
     except Exception:
         progress_update(job, 0.0, "The machine jammed", stage="error")
         raise
@@ -274,13 +279,16 @@ def render_drawing(image: Image.Image, preview: bool = False, post: bool = False
 
 
 def _render_drawing(image: Image.Image, preview: bool = False, post: bool = False,
-                    job: str | None = None) -> tuple[Image.Image, dict]:
+                    job: str | None = None, export_profile: str | None = None,
+                    wallpaper_fit: str = "contain") -> tuple[Image.Image, dict]:
     def report(fraction, label):
         # Engines report 0..1 over their own work; leave headroom for encoding/upload.
-        progress_update(job, 0.01 + 0.89 * float(fraction), label)
+        progress_update(job, 0.01 + (0.65 if export_profile else 0.89) * float(fraction), label)
 
     settings = settings_from_request()
     style = settings.pop("drawing_style")
+    if export_profile and style == "original":
+        raise ValueError("Choose a newer drawing style for high-resolution export")
     color_amount = settings.pop("color_amount")
     shadow_fill = settings.pop("shadow_fill")
     # Pages on the wall are always printed at the top scale; downloads honor the Print slider.
@@ -301,10 +309,16 @@ def _render_drawing(image: Image.Image, preview: bool = False, post: bool = Fals
         rendered, meta = contour_engine.convert(image, **settings, color_mode=mode,
             color_amount=color_amount, shadow_fill=shadow_fill,
             include_color_endpoints=preview, progress=report)
-    progress_update(job, 0.91, "Pulling the page…")
+    if export_profile:
+        rendered = print_plan(meta, PAPERS.get(settings["paper"], PAPERS["white"]),
+                              INKS.get(settings["ink"], INKS["carbon"]),
+                              export_profile, wallpaper_fit,
+                              progress=lambda fraction, label: progress_update(job, .67+.25*fraction, label))
+    progress_update(job, 0.93 if export_profile else 0.91, "Pulling the page…")
     side = 900 if preview else 3200
     for page in [rendered, *meta.get("color_endpoints", [])]:
-        page.thumbnail((side, side), Image.Resampling.LANCZOS)
+        if not export_profile:
+            page.thumbnail((side, side), Image.Resampling.LANCZOS)
     meta["drawing_style"] = style
     meta["color_amount"] = color_amount
     meta["shadow_fill"] = shadow_fill
@@ -545,6 +559,36 @@ def convert():
             },
         }
     )
+
+
+@app.route("/export", methods=["POST"])
+def export_image():
+    profile = request.form.get("export_profile", "")
+    fit = request.form.get("wallpaper_fit", "contain")
+    if profile not in EXPORT_PROFILES or fit not in ("contain", "cover"):
+        return jsonify({"error": "Choose a supported export size and framing"}), 400
+    try:
+        image = load_request_image()
+    except Exception as e:
+        return jsonify({"error": f"Invalid image: {e}"}), 400
+    try:
+        rendered, _meta = render_drawing(image, export_profile=profile, wallpaper_fit=fit)
+    except HTTPException:
+        raise
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception:
+        app.logger.exception("High-resolution export failed")
+        return jsonify({"error": "Could not print this export"}), 500
+    job = request_job()
+    progress_update(job, .95, "Saving the PNG…")
+    buffer = io.BytesIO()
+    rendered.save(buffer, format="PNG")
+    buffer.seek(0)
+    progress_update(job, 1, "Live", stage="done")
+    name = "phone-wallpaper" if profile.startswith("phone_") else "typewriter-drawing"
+    return send_file(buffer, mimetype="image/png", as_attachment=True,
+                     download_name=f"{name}-{rendered.width}x{rendered.height}.png")
 
 
 def image_data_url(image: Image.Image) -> str:

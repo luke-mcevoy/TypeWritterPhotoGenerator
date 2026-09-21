@@ -65,6 +65,46 @@
     const drawingStyle = $("#drawing-style");
     const colorAmountSlider = $("#color-amount-slider");
     const shadowFillSlider = $("#shadow-fill-slider");
+    const exportProfile = $("#export-profile");
+    const wallpaperFit = $("#wallpaper-fit");
+    const wallpaperPreview = $("#wallpaper-preview");
+
+    function syncExport() {
+        const original = drawingStyle.value === "original";
+        for (const option of exportProfile.options) option.disabled = original && option.value !== "standard";
+        if (original) exportProfile.value = "standard";
+        const profile = exportProfile.value;
+        const phone = profile.startsWith("phone_");
+        $("#wallpaper-controls").classList.toggle("hidden", !phone);
+        $("#print-scale-control").classList.toggle("hidden", original || profile !== "standard");
+        const hints = {
+            standard: original ? "JPEG export. Choose a newer drawing style for high-resolution PNGs." : "Save uses the Print setting below.",
+            maximum: "Redraws the same keys sharply, up to 6,000 px on the long edge and 12 megapixels. PNG; original proportions.",
+            phone_tall: "2160 × 4680 PNG · 9:19.5 tall-phone format. Redrawn at full resolution when you Save.",
+            phone_classic: "2160 × 3840 PNG · 9:16 phone format. Redrawn at full resolution when you Save.",
+        };
+        $("#export-hint").textContent = hints[profile];
+        paintWallpaperPreview();
+    }
+
+    function paintWallpaperPreview() {
+        if (!exportProfile.value.startsWith("phone_") || !glyphImage.complete || !glyphImage.naturalWidth) return;
+        wallpaperPreview.height = exportProfile.value === "phone_tall" ? 468 : 384;
+        const context = wallpaperPreview.getContext("2d");
+        // Sample actual paper rather than duplicate the server's paper palette.
+        context.drawImage(glyphImage, 0, 0, 1, 1, 0, 0, 1, 1);
+        const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
+        context.fillStyle = `rgb(${r}, ${g}, ${b})`;
+        context.fillRect(0, 0, wallpaperPreview.width, wallpaperPreview.height);
+        const ratios = [wallpaperPreview.width/glyphImage.naturalWidth, wallpaperPreview.height/glyphImage.naturalHeight];
+        const factor = wallpaperFit.value === "cover" ? Math.max(...ratios) : Math.min(...ratios);
+        const width = glyphImage.naturalWidth*factor, height = glyphImage.naturalHeight*factor;
+        context.drawImage(glyphImage, (wallpaperPreview.width-width)/2, (wallpaperPreview.height-height)/2, width, height);
+    }
+
+    exportProfile.addEventListener("change", syncExport);
+    wallpaperFit.addEventListener("change", paintWallpaperPreview);
+    glyphImage.addEventListener("load", paintWallpaperPreview);
 
     function syncDrawingStyle() {
         const original = drawingStyle.value === "original";
@@ -74,6 +114,7 @@
         $$(".contour-only").forEach(el => el.classList.toggle("hidden", original));
         $("#download-text-btn").classList.toggle("hidden", !original || !currentTextData);
         $("#download-html-btn").classList.toggle("hidden", !original || !currentHtmlData);
+        syncExport();
     }
 
     function paintColor() {
@@ -424,7 +465,7 @@
         colorEndpoints = null;
         ++genSeq;
         clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => generate({ preview: true }), ms);
+        debounceTimer = setTimeout(() => { debounceTimer = null; generate({ preview: true }); }, ms);
     }
 
     const EXPECTED_MS = {
@@ -710,6 +751,7 @@
     }
 
     $("#download-image-btn").addEventListener("click", async () => {
+        if (exportProfile.value !== "standard") return downloadHighResolution();
         const scale = parseInt(scaleSlider.value, 10);
         setLive(true, "Printing…");
         const data = await generate({ preview: false, scale });
@@ -719,6 +761,49 @@
             setLive(false, "Live");
         }
     });
+
+    async function downloadHighResolution() {
+        if (!currentFile || printing) return;
+        const refreshPreview = !!inflight || !!debounceTimer || previewDirty;
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+        previewDirty = false;
+        ++genSeq;
+        setPrinting(true);
+        try {
+            if (inflight) {
+                setLive(true, "Finishing the preview…");
+                await inflight;
+            }
+            const job = newJob();
+            const formData = new FormData();
+            appendImage(formData, currentFile);
+            appendSettings(formData);
+            formData.append("export_profile", exportProfile.value);
+            formData.append("wallpaper_fit", wallpaperFit.value);
+            formData.append("job", job);
+            startProgressClock("print", "Printing high resolution…");
+            setLive(true, "Printing high resolution…", 0);
+            const response = await submitDrawing("/export", { method: "POST", body: formData }, job, "Printing high resolution…");
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || "Could not print this export");
+            }
+            const blob = await response.blob();
+            const filename = response.headers.get("Content-Disposition")?.match(/filename="?([^";]+)"?/)?.[1] || "typewriter-high-resolution.png";
+            const url = URL.createObjectURL(blob);
+            downloadUrl(url, filename);
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+            setLive(false, "Live");
+        } catch (error) {
+            setLive(false, "Jammed");
+            toast(error.message, "error");
+        } finally {
+            setPrinting(false);
+            syncExport();
+            if (refreshPreview) scheduleGenerate(0);
+        }
+    }
 
     $("#download-html-btn").addEventListener("click", () => {
         if (!currentHtmlData) return;
